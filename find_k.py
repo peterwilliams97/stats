@@ -11,78 +11,28 @@ from collections import defaultdict
 print np.version.version 
 
 
-def cluster_points(X, mu):
-    clusters = defaultdict(list)
-    #print mu   
-    for x in X:
-        #print np.apply_along_axis(np.linalg.norm, 1, x - mu)
-        #print np.linalg.norm(x - mu, ord=None, axis=0)
-        i = np.argmin(np.apply_along_axis(np.linalg.norm, 1, x - mu)) 
-        #print k
-        clusters[i].append(x)
-     
-    #for k, v in clusters.items():
-    #    print k, len(v)
-    return clusters
-
- 
-def reevaluate_centers(clusters):
-    """
-        mu: a np array
-        clusters: dict of np arrays
-    """
-    #print 'mu'
-    #print mu
-    #print 'clusters'
-    #print clusters
-    #exit()
-    keys = sorted(clusters.keys())
-    return np.array([np.mean(clusters[k], axis=0) for k in keys])
-
- 
-def has_converged(mu, oldmu):
-    return set([tuple(a) for a in mu]) == set([tuple(a) for a in oldmu])
-
- 
-def _find_centers(X, k):
-  
-    # Initialize to K random centers
-    mu = random.sample(X, k)
-
-    assert len(mu) == k, mu
-
-    while True:
-        assert len(mu) == k, mu
-        oldmu = mu
-        # Assign all points in X to clusters
-        clusters = cluster_points(X, mu)
-        assert len(clusters) == k
-        # Reevaluate centers
-        mu = reevaluate_centers(clusters)
-        if has_converged(mu, oldmu): 
-            break
-    if False:
-        print
-        print mu
-        print k, len(mu)
-        #print clusters
-        exit()
-    return mu, clusters
-
-
-
 def find_centers(X, k):
     estimator = KMeans(init='k-means++', n_clusters=k, n_init=10)
     estimator.fit(X)
     mu = estimator.cluster_centers_
     clusters = estimator.labels_
-    print 'mu:', type(mu), len(mu), mu.shape, mu
-    print 'clusters:', type(clusters), len(clusters), clusters.shape, clusters
+    #print 'mu:', type(mu), len(mu), mu.shape, mu
+    #print 'clusters:', type(clusters), len(clusters), clusters.shape, clusters
     return mu, clusters
+
     
-def Wk(mu, clusters):
+def Wk(X, mu, clusters):
     """Intra-cluster distances"""
+    #print mu.shape
+    #print clusters.shape
     k = len(mu)
+    wk = 0.0
+    for i in range(k):
+        x = X[clusters[i], :]
+        norms = np.linalg.norm(mu[i] - x)**2/(2*x.shape[0])
+        norm_sum = np.sum(norms)
+        wk += norm_sum
+    return wk
     return sum(np.linalg.norm(mu[i] - c)**2/(2*len(c)) 
                for i in range(k) 
                for c in clusters[i])
@@ -106,6 +56,8 @@ def gap_statistic(X):
         sk: Normalized std dev log(intra-cluster distance) for each k
     """
     (xmin, xmax), (ymin, ymax) = bounding_box(X)
+    #print X.shape
+    #print (xmin, xmax), (ymin, ymax) 
     # Dispersion for real distribution
     ks = range(n_K_0, n_K_1)
     Wks = np.zeros(len(ks))
@@ -113,7 +65,10 @@ def gap_statistic(X):
     sk = np.zeros(len(ks))
     for indk, k in enumerate(ks):
         mu, clusters = find_centers(X, k)
-        Wks[indk] = np.log(Wk(mu, clusters))
+        #print indk, k
+        #print mu.shape, mu
+        #print clusters.shape, clusters
+        Wks[indk] = np.log(Wk(X, mu, clusters))
 
         # Create B reference datasets
         BWkbs = np.zeros(B)
@@ -121,7 +76,7 @@ def gap_statistic(X):
             Xb = np.vstack([np.random.uniform(xmin, xmax, X.shape[0]),
                             np.random.uniform(ymin, ymax, X.shape[0])]).T
             mu, clusters = find_centers(Xb, k)
-            BWkbs[i] = np.log(Wk(mu, clusters))
+            BWkbs[i] = np.log(Wk(X, mu, clusters))
         Wkbs[indk] = sum(BWkbs)/B
         sk[indk] = np.sqrt(sum((BWkbs-Wkbs[indk])**2)/B)
     sk = sk*np.sqrt(1+1/B)
@@ -205,39 +160,44 @@ def closest_indexes(centroids, mu):
         centroids: cluster centroids
         mu: detected cluster centers
     """
-    def inner(centroids, mu):
-        k = centroids.shape[0]
-        mu_indexes = [-1] * k 
-        for i in range(k):
-            diffs = np.apply_along_axis(np.linalg.norm, 1, mu[i] - centroids) 
-            # Sort by closest centroid
-            mu_indexes[i] = np.argmin(diffs, axis=0)
-            
-        for i in range(k):
-            if mu_indexes.count(i) <= 1:
-                continue
-            ties = [j for j in range(k) if mu_indexes[j] == i]
-            for j in ties:
-                mu_indexes[j] = -1
-            mu_ties = mu[ties]
-            diffs = np.apply_along_axis(np.linalg.norm, 1, mu_ties - centroids[i]) 
-            min_index = np.argmin(diffs, axis=0)
-            mu_indexes[min_index] = i
-        return mu_indexes
-
+   
     k = centroids.shape[0]
+         
+    x = np.empty((k, k, 2))
+    for i in 0, 1:
+        x[:,:,i] = np.subtract.outer(mu[:,i], centroids[:,i]) 
+   
+    diffs = np.apply_along_axis(np.linalg.norm, 2, x)
+    order = np.argsort(diffs, axis=None)
+ 
+    if False:
+        print
+        print diffs.shape
+        print diffs
+        print order.shape
+        print order
+        
+        for i in range(k):
+            for j in range(k):
+                x = order[i, j] % k
+                y = order[i, j] // k
+                print diffs[y, x], mu[y,:], centroids[x,:]
+            
+    mu_done = set()
+    centroids_done = set()
     mu_indexes = [-1] * k 
-    while -1 in mu_indexes:
-        print '**', mu_indexes, 
-        remaining_indexes = [j for j in range(k) if mu_indexes[j] == -1]
-        indexes = inner(centroids[remaining_indexes], mu[remaining_indexes])
-        for i, j in enumerate(remaining_indexes):
-            mu_indexes[j] = indexes[i]
-        print mu_indexes
-    
-    for i in range(k):
-        print centroids[i, :], mu[mu_indexes[i], :]
-    
+    for i in range(k**2):
+        x = order[i] % k
+        y = order[i] // k
+        if y in mu_done or x in centroids_done:
+            continue
+        mu_indexes[x] = y
+        mu_done.add(y)
+        centroids_done.add(x)
+        #print '%2d %2d %2d %.2f' % (i, y, x , diffs[y, x]), mu[y,:], centroids[x,:]
+        if len(mu_done) >= k:
+            break
+
     return mu_indexes    
 
 
@@ -246,7 +206,7 @@ def test(actual_k, N, r, do_graph=False):
     X, centroids = init_board_gauss(N, actual_k, r)  
     mu, clusters = find_centers(X, actual_k) 
     
-    print 'centroids', centroids.shape, centroids
+    print 'centroids', centroids.shape # , centroids
     print 'mu', mu.shape
     print 'clusters', clusters.shape
     
@@ -254,8 +214,8 @@ def test(actual_k, N, r, do_graph=False):
     mu = mu[indexes]
     clusters = clusters[indexes]
     
-    for i in range(actual_k):
-        print '>>>', centroids[i, :], mu[i, :]
+    #for i in range(actual_k):
+    #    print '>>>', centroids[i, :], mu[i, :]
     
     
     #print actual_k, N, r, do_graph
@@ -301,7 +261,7 @@ def test(actual_k, N, r, do_graph=False):
 
         ax.set_xlabel('x', fontsize=20)
         ax.set_ylabel('y', fontsize=20)
-        ax.set_title('Clusters')
+        ax.set_title('Clusters: k=%d, N=%d, r=%.2f' % (k, N, r))
         plt.xlim((-1.0, 1.0))
         plt.ylim((-1.0, 1.0))
 
@@ -339,14 +299,16 @@ def test(actual_k, N, r, do_graph=False):
 
     
 r = 0.1    
-test(4, 200, r, do_graph=True)    
+#test(4, 200, r, do_graph=False)    
+test(5, 50, r, do_graph=True) 
+test(5, 50, r, do_graph=True) 
     
-M = 10    
+M = 1    
 results = []
 for N in (20, 50, 100, 200, 400, 1000):
-    for k in (1, 2, 3, 5, 7, 10, 20)[1:]:
+    for k in (1, 2, 3, 5, 7, 10, 20)[4:]:
         if k**2 > N: continue
-        m = sum(test(k, N, r) for _ in range(M))
+        m = sum(test(k, N, r, do_graph=False) for _ in range(M))
         results.append((N, k, m))
         print 'N=%3d,k=%2d:  %d of %d = %3d%%' % (N, k, m, M, int(100.0 * m/ M))
         print '-' * 80
