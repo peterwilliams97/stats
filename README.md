@@ -1,4 +1,4 @@
 stats
 =====
 
-Miscellaneous statistics, ML, etc
+Miscellaneous statistics, machine learning, etc

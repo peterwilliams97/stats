@@ -5,7 +5,10 @@
 from __future__ import division
 import sys, random
 import numpy as np
+from sklearn.cluster import KMeans
 from collections import defaultdict
+
+print np.version.version 
 
 
 def cluster_points(X, mu):
@@ -41,7 +44,7 @@ def has_converged(mu, oldmu):
     return set([tuple(a) for a in mu]) == set([tuple(a) for a in oldmu])
 
  
-def find_centers(X, k):
+def _find_centers(X, k):
   
     # Initialize to K random centers
     mu = random.sample(X, k)
@@ -67,6 +70,16 @@ def find_centers(X, k):
     return mu, clusters
 
 
+
+def find_centers(X, k):
+    estimator = KMeans(init='k-means++', n_clusters=k, n_init=10)
+    estimator.fit(X)
+    mu = estimator.cluster_centers_
+    clusters = estimator.labels_
+    print 'mu:', type(mu), len(mu), mu.shape, mu
+    print 'clusters:', type(clusters), len(clusters), clusters.shape, clusters
+    return mu, clusters
+    
 def Wk(mu, clusters):
     """Intra-cluster distances"""
     k = len(mu)
@@ -124,6 +137,7 @@ def init_board(N):
 def init_board_gauss(N, k, r):
     n = N/k
     X = np.empty((N, 2))
+    centroids = np.empty((k, 2))
 
     def add_cluster(X, j0, j1, cx, cy, s):
         j = j0
@@ -149,7 +163,7 @@ def init_board_gauss(N, k, r):
             assert -1 <= x[1] <= 1, x[1]
             dist += min(x[0] + 1.0, 1.0 - x[0])
             dist += min(x[1] + 1.0, 1.0 - x[1])
-            
+
             #print dist,
             for j in range(k):
                 if j == i: continue
@@ -158,15 +172,15 @@ def init_board_gauss(N, k, r):
         if dist > best_dist:
             best_dist, best_clusters = dist, clusters
 
-    clusters = []            
+
     for i in range(k):
         cx, cy = best_clusters[i] # np.random.uniform(-1, 1), np.random.uniform(-1, 1)
         s = r # np.random.uniform(r, r)
         j0, j1 = int(round(i * n)), int(round((i + 1) * n))
         add_cluster(X, j0, j1, cx, cy, s)
-        clusters.append([cx, cy, s])
+        centroids[i] = cx, cy
    
-    return X, clusters    
+    return X, centroids    
  
  
 import matplotlib.pyplot as plt 
@@ -184,10 +198,66 @@ def pbb(X, c=None):
         print '(%5.2f, %5.2f %5.2f)' % (cx, cy, s),
     print    
 
+
+def closest_indexes(centroids, mu):
+    """
+        k: number of clusters
+        centroids: cluster centroids
+        mu: detected cluster centers
+    """
+    def inner(centroids, mu):
+        k = centroids.shape[0]
+        mu_indexes = [-1] * k 
+        for i in range(k):
+            diffs = np.apply_along_axis(np.linalg.norm, 1, mu[i] - centroids) 
+            # Sort by closest centroid
+            mu_indexes[i] = np.argmin(diffs, axis=0)
+            
+        for i in range(k):
+            if mu_indexes.count(i) <= 1:
+                continue
+            ties = [j for j in range(k) if mu_indexes[j] == i]
+            for j in ties:
+                mu_indexes[j] = -1
+            mu_ties = mu[ties]
+            diffs = np.apply_along_axis(np.linalg.norm, 1, mu_ties - centroids[i]) 
+            min_index = np.argmin(diffs, axis=0)
+            mu_indexes[min_index] = i
+        return mu_indexes
+
+    k = centroids.shape[0]
+    mu_indexes = [-1] * k 
+    while -1 in mu_indexes:
+        print '**', mu_indexes, 
+        remaining_indexes = [j for j in range(k) if mu_indexes[j] == -1]
+        indexes = inner(centroids[remaining_indexes], mu[remaining_indexes])
+        for i, j in enumerate(remaining_indexes):
+            mu_indexes[j] = indexes[i]
+        print mu_indexes
+    
+    for i in range(k):
+        print centroids[i, :], mu[mu_indexes[i], :]
+    
+    return mu_indexes    
+
+
 def test(actual_k, N, r, do_graph=False):
 
     X, centroids = init_board_gauss(N, actual_k, r)  
-    mu, clusters2 = find_centers(X, actual_k) 
+    mu, clusters = find_centers(X, actual_k) 
+    
+    print 'centroids', centroids.shape, centroids
+    print 'mu', mu.shape
+    print 'clusters', clusters.shape
+    
+    indexes = closest_indexes(centroids, mu)
+    mu = mu[indexes]
+    clusters = clusters[indexes]
+    
+    for i in range(actual_k):
+        print '>>>', centroids[i, :], mu[i, :]
+    
+    
     #print actual_k, N, r, do_graph
     #print len(centroids), len(mu)
     #for i, (c, m) in enumerate(zip(centroids, mu)):
@@ -210,8 +280,27 @@ def test(actual_k, N, r, do_graph=False):
                 c=color_map[i % len(color_map)], 
                 marker=marker_map[i % len(marker_map)])
 
-        ax.set_xlabel(r'x', fontsize=20)
-        ax.set_ylabel(r'y', fontsize=20)
+        ax.scatter(centroids[:, 0], centroids[:, 1],
+                marker='x', s=169, linewidths=3,
+                color='w', zorder=10)
+        ax.scatter(centroids[:, 0], centroids[:, 1],
+                marker='x', s=169, linewidths=1,
+                color='b', zorder=11)
+
+        ax.scatter(mu[:, 0], mu[:, 1],
+                marker='+', s=169, linewidths=3,
+                color='k', zorder=9) 
+        ax.scatter(mu[:, 0], mu[:, 1],
+                marker='+', s=121, linewidths=1,
+                color='r', zorder=10)   
+
+        for i in range(k): 
+            ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'r-', lw=3, zorder=20)
+            ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'k-', lw=1, zorder=21)
+
+
+        ax.set_xlabel('x', fontsize=20)
+        ax.set_ylabel('y', fontsize=20)
         ax.set_title('Clusters')
         plt.xlim((-1.0, 1.0))
         plt.ylim((-1.0, 1.0))
@@ -249,8 +338,8 @@ def test(actual_k, N, r, do_graph=False):
     return correct
 
     
-r = 0.01    
-test(16, 200, r, do_graph=True)    
+r = 0.1    
+test(4, 200, r, do_graph=True)    
     
 M = 10    
 results = []
