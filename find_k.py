@@ -27,12 +27,17 @@ def Wk(X, mu, clusters):
     #print clusters.shape
     k = len(mu)
     wk = 0.0
+    #print '------------', k, X.shape, mu.shape, clusters.shape, clusters
     for i in range(k):
-        x = X[clusters[i], :]
-        norms = np.linalg.norm(mu[i] - x)**2/(2*x.shape[0])
-        norm_sum = np.sum(norms)
+        this_cluster = np.where(clusters == i)
+        x = X[this_cluster]
+        norm_sum = np.linalg.norm(x - mu[i])**2/(2*x.shape[0])
+        #norm_sum = np.sum(norms)
+        #print i, x.shape, norm_sum, this_cluster
         wk += norm_sum
+      
     return wk
+    
     return sum(np.linalg.norm(mu[i] - c)**2/(2*len(c)) 
                for i in range(k) 
                for c in clusters[i])
@@ -76,10 +81,11 @@ def gap_statistic(X):
             Xb = np.vstack([np.random.uniform(xmin, xmax, X.shape[0]),
                             np.random.uniform(ymin, ymax, X.shape[0])]).T
             mu, clusters = find_centers(Xb, k)
-            BWkbs[i] = np.log(Wk(X, mu, clusters))
+            BWkbs[i] = np.log(Wk(Xb, mu, clusters))
         Wkbs[indk] = sum(BWkbs)/B
         sk[indk] = np.sqrt(sum((BWkbs-Wkbs[indk])**2)/B)
     sk = sk*np.sqrt(1+1/B)
+    #assert False
     return ks, Wks, Wkbs, sk    
 
 
@@ -169,6 +175,9 @@ def closest_indexes(centroids, mu):
    
     diffs = np.apply_along_axis(np.linalg.norm, 2, x)
     order = np.argsort(diffs, axis=None)
+    if k == 1:
+        order = order.ravel()
+    #print order.shape    
  
     if False:
         print
@@ -205,15 +214,15 @@ def test(actual_k, N, r, do_graph=False):
 
     X, centroids = init_board_gauss(N, actual_k, r)  
     mu, clusters = find_centers(X, actual_k) 
-    
-    print 'centroids', centroids.shape # , centroids
-    print 'mu', mu.shape
-    print 'clusters', clusters.shape
+
+    #print 'centroids', centroids.shape # , centroids
+    #print 'mu', mu.shape
+    #print 'clusters', clusters.shape
     
     indexes = closest_indexes(centroids, mu)
     mu = mu[indexes]
     clusters = clusters[indexes]
-    
+
     #for i in range(actual_k):
     #    print '>>>', centroids[i, :], mu[i, :]
     
@@ -287,6 +296,7 @@ def test(actual_k, N, r, do_graph=False):
             _, wk1, wkb1, sk1 = results[i + 1]  
             gap1 = wkb1 - wk1    
             ok = gap > gap1 - sk1
+            #ok = not ok
             if ok and predicted_k < 0:
                 predicted_k = k
         #print '%2d %5.2f %5.2f %5.2f : %5.2f %s' % (k, wk, wkb, sk, gap, ok)
@@ -299,15 +309,19 @@ def test(actual_k, N, r, do_graph=False):
 
     
 r = 0.1    
-#test(4, 200, r, do_graph=False)    
-test(5, 50, r, do_graph=True) 
-test(5, 50, r, do_graph=True) 
+test(4, 200, r, do_graph=True)    
+#test(5, 50, r, do_graph=True) 
+#test(5, 50, r, do_graph=True) 
+test(7, 400, r, do_graph=True) 
     
-M = 1    
+M = 5    
 results = []
-for N in (20, 50, 100, 200, 400, 1000):
-    for k in (1, 2, 3, 5, 7, 10, 20)[4:]:
-        if k**2 > N: continue
+
+print('M=%d' % M)
+for N in (20, 50, 100, 200, 400, 1000)[:]:
+    for k in (1, 2, 3, 5, 7, 10, 20)[:]:
+        if 4 * (k**2) > N: continue
+        if not n_K_0 <= k < n_K_1: continue
         m = sum(test(k, N, r, do_graph=False) for _ in range(M))
         results.append((N, k, m))
         print 'N=%3d,k=%2d:  %d of %d = %3d%%' % (N, k, m, M, int(100.0 * m/ M))
