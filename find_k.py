@@ -159,9 +159,9 @@ def calc_centroids(k, r):
         if not changed and m > 1:
             break
             
-    scale = max(1.0 - r, 0.5)
+    scale = 1.0 - min(r, 0.5) ** 2
 
-    x0 = x0 * np.sqrt(scale)   
+    x0 = x0 * scale  
         
     return x0        
     
@@ -409,17 +409,17 @@ results = []
 
 print('M=%d' % M)
 
-for N in (20, 50, 100, 200, 400, 1e3, 1e4, 1e5)[4:]:
-    for k in (1, 2, 3, 5, 7, 9, 20)[1:]:
-        for r in (0.01, 0.1, 0.3, 0.5):
+for N in (20, 50, 100, 200, 400, 1e3, 1e4)[4:]:
+    for k in (1, 2, 3, 5, 7, 9)[1:]:
+        for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
             if 5 * (k**2) > N: continue
             if not n_K_0 <= k < n_K_1: continue
             m = sum(test(k, N, r, do_graph=False) for _ in range(M))
-            results.append((N, k, m))
+            results.append((k, N, r, m))
             print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
             print '-' * 80
             sys.stdout.flush()
 
-for N, k, m in results:
-    print 'N=%3d,k=%2d:  %d of %d = %3d%%' % (N, k, m, M, int(100.0 * m/ M))
+for k, N, r, m in results:
+    print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
 
