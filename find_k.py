@@ -67,7 +67,7 @@ def gap_statistic(X):
         X: points
         
         Returns: ks, logWks, logWkbs, sk
-            ks: k values
+            ks: k values  MIN_K <= k <= MAX_K]
             Wks: log(intra-cluster distance) for each k
             Wkbs: average referemce log(intra-cluster distance) for each k
             sk: Normalized std dev log(intra-cluster distance) for each k
@@ -96,18 +96,6 @@ def gap_statistic(X):
         mu, labels = find_centers(X, k)
         Wks[indk] = np.log(Wk(X, mu, labels))
         Wkbs[indk], sk[indk] = reference_results(k)    
-        
-        if False:
-            BWkbs = np.zeros(B)
-            for i in range(B):
-                Xb = np.vstack([np.random.uniform(xmin, xmax, X.shape[0]),
-                                np.random.uniform(ymin, ymax, X.shape[0])]).T
-                mu, labels = find_centers(Xb, k)
-                BWkbs[i] = np.log(Wk(Xb, mu, labels))
-            Wkbs[indk] = sum(BWkbs)/B
-            sk[indk] = np.sqrt(sum((BWkbs - Wkbs[indk])**2)/B)
-
-    #sk *= np.sqrt(1 + 1/B)
 
     return ks, Wks, Wkbs, sk    
 
@@ -122,15 +110,22 @@ def calc_centroids(k, r):
     """Return best spaced centroids in square of radius 1 around origin
     """
 
-    x0 = np.zeros((k, 2))
+    scale = 1.0 - min(r, 0.5) ** 2
 
     if k == 1:
-        return x0
+        return np.random.uniform(-scale, scale, size=(k, 2))
+    
+    # Start with centroids near middle of square
+    x0 = np.random.uniform(-0.5, 0.5, size=(k, 2))
 
     M = 1000
-    x1 = np.zeros((k - 1, 2))
+    
     test_points = np.random.uniform(-1, 1, size=(M, 2))
+    
+    print '@@1'
 
+    # Maximize minimum distance between centroids
+    x1 = np.empty((k - 1, 2))
     for m in range(10):
         changed = False
         for i in range(k):
@@ -144,13 +139,11 @@ def calc_centroids(k, r):
             if diffs[max_j_min] > current_min:
                 x0[i] = test_points[max_j_min]
                 changed = True
+        print '@@2', m        
         if not changed and m > 1:
             break
 
-    scale = 1.0 - min(r, 0.5) ** 2
-
     x0 *= scale  
-
     return x0        
 
     
@@ -238,8 +231,8 @@ def closest_indexes(centroids, mu):
     return mu_indexes    
 
 
-color_map = ['c', 'k', 'y', 'm']
-marker_map = ['v', 'o', 's']    
+color_map = ['b', 'r', 'k', 'y', 'c', 'm']
+marker_map = ['v', 'o', 's', 'x']    
 
 def graph_data(k, N, r, X, centroids, mu): 
 
@@ -263,8 +256,12 @@ def graph_data(k, N, r, X, centroids, mu):
     ax.scatter(mu[:, 0], mu[:, 1], marker='+', s=121, linewidths=1, color='r', zorder=10)   
 
     for i in range(k): 
-        ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'r-', lw=3, zorder=20)
-        ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'k-', lw=1, zorder=21)
+        x, y = centroids[i, :] 
+        dx, dy = mu[i, :] - centroids[i, :] 
+        ax.arrow(x, y, dx, dy, lw=1, head_width=0.03, length_includes_head=True,
+            zorder=5, fc='y', ec='k')
+        #ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'r-', lw=3, zorder=20)
+        #ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'k-', lw=1, zorder=21)
 
     ax.set_xlabel('x', fontsize=20)
     ax.set_ylabel('y', fontsize=20)
@@ -276,118 +273,86 @@ def graph_data(k, N, r, X, centroids, mu):
     #fig.tight_layout()    
     plt.show()    
 
+    
+def find_k(X, verbose=False):
 
-def test(actual_k, N, r, do_graph=False):
-
-    X, centroids = init_board_gauss(N, actual_k, r)  
-
-    if do_graph:
-        mu, labels = find_centers(X, actual_k)
-        indexes = closest_indexes(centroids, mu)
-        graph_data(actual_k, N, r, X, centroids, mu[indexes])
-        
-    if False:
-        k = actual_k
-        color_map = ['c', 'k', 'y', 'm']
-        marker_map = ['v', 'o', 's', 'o']
-        fig, ax = plt.subplots()
-        n0 = 0 
-        for i in range(k):
-            n = N * (i + 1)/k
-            x = X[n0:n, :]
-            n0 = n
-            pbb(x, centroids[i])
-            ax.scatter(x[:, 0], x[:, 1], 
-                c=color_map[i % len(color_map)], 
-                marker=marker_map[i % len(marker_map)])
-
-        ax.scatter(centroids[:, 0], centroids[:, 1],
-                marker='x', s=169, linewidths=3,
-                color='w', zorder=10)
-        ax.scatter(centroids[:, 0], centroids[:, 1],
-                marker='x', s=169, linewidths=1,
-                color='b', zorder=11)
-
-        ax.scatter(mu[:, 0], mu[:, 1],
-                marker='+', s=169, linewidths=3,
-                color='k', zorder=9) 
-        ax.scatter(mu[:, 0], mu[:, 1],
-                marker='+', s=121, linewidths=1,
-                color='r', zorder=10)   
-
-        for i in range(k): 
-            ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'r-', lw=3, zorder=20)
-            ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'k-', lw=1, zorder=21)
-
-
-        ax.set_xlabel('x', fontsize=20)
-        ax.set_ylabel('y', fontsize=20)
-        ax.set_title('Clusters: k=%d, N=%d, r=%.2f' % (k, N, r))
-        plt.xlim((-1.0, 1.0))
-        plt.ylim((-1.0, 1.0))
-
-        ax.grid(True)
-        #fig.tight_layout()    
-        plt.show()
-
-
-    ks, logWks, logWkbs, sk = gap_statistic(X) 
-    if False:
-        print 'ks', ks 
-        print 'logWks', logWks 
-        print 'logWkbs', logWkbs
-        print 'sk',  sk    
-
-    results = zip(ks, logWks, logWkbs, sk)
-    ok = None
+    ks, logWks, logWkbs, sks = gap_statistic(X) 
+   
+    statistics = zip(ks, logWks, logWkbs, sks)
     predicted_k = -1
 
-    for i, (k, wk, wkb, sk) in enumerate(results):
-        gap = wkb - wk
-        if i + 1 < len(results):
-            _, wk1, wkb1, sk1 = results[i + 1]  
-            gap1 = wkb1 - wk1    
-            ok = gap > gap1 - sk1
-            #ok = not ok
-            if ok and predicted_k < 0:
-                predicted_k = k
-        #print '%2d %5.2f %5.2f %5.2f : %5.2f %s' % (k, wk, wkb, sk, gap, ok)
+    for i in range(len(statistics) - 1):
+        k, logWk,  logWkb,  sk  = statistics[i]
+        _, logWk1, logWkb1, sk1 = statistics[i + 1]
+        gap = logWkb - logWk
+        gap1 = logWkb1 - logWk1
+        ok = gap > gap1 - sk1
+        if ok and predicted_k < 0:
+            predicted_k = k
+            if not verbose:
+                break
+        if verbose:    
+            print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap, ok))
         
-    correct = predicted_k == actual_k
-    print 'k=%d,N=%3d,r=%.2f: predicted_k=%d,correct=%s' % (actual_k, N, r, predicted_k, correct)
+    return predicted_k    
+    
+
+def test(k, N, r, do_graph=False, verbose=False):
+
+    assert MIN_K <= k <= MAX_K, 'invalid k=%d' % k
+
+    X, centroids = init_board_gauss(N, k, r)  
+    print '@@@'
+
+    if do_graph:
+        mu, labels = find_centers(X, k)
+        mu_indexes = closest_indexes(centroids, mu)
+        graph_data(k, N, r, X, centroids, mu[mu_indexes])
+
+    predicted_k = find_k(X, verbose)    
+    
+    correct = predicted_k == k
+    print('k=%d,N=%3d,r=%.2f: predicted_k=%d,correct=%s' % (k, N, r, predicted_k, correct))
     sys.stdout.flush()
-    #exit()
     return correct
+    
+
+def test_all(verbose=False):
+    r = 0.1    
+    #test(10,100, 0.1, do_graph=True)
+    test(2, 100, 1.0, do_graph=True)
+    
+    test(4, 200, r, do_graph=True) 
+    test(9, 200, r, do_graph=True) 
+    test(4, 200, 0.3, do_graph=True) 
+    test(7, 200, 0.3, do_graph=True) 
+      
+     
+    test(4, 200, r, do_graph=True)    
+    test(5, 50, r, do_graph=True) 
+    test(5, 50, r, do_graph=True) 
+    test(7, 400, r, do_graph=True) 
+        
+    M = 1    
+    results = []
 
     
-r = 0.1    
-test(4, 200, r, do_graph=True) 
-test(9, 200, r, do_graph=True) 
-#test(4, 200, 0.3, do_graph=True) 
-#test(7, 200, 0.3, do_graph=True) 
-#test(2, 200, r, do_graph=True)  
- 
-#test(4, 200, r, do_graph=True)    
-#test(5, 50, r, do_graph=True) 
-#test(5, 50, r, do_graph=True) 
-#test(7, 400, r, do_graph=True) 
-    
-M = 1    
-results = []
+    print('M=%d' % M)
 
-print('M=%d' % M)
+    for N in (20, 50, 100, 200, 400, 1e3, 1e4)[4:]:
+        for k in (1, 2, 3, 5, 7, 9)[1:]:
+            for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
+                if 5 * (k**2) > N: continue
+                if not MIN_K <= k <= MAX_K: continue
+                m = sum(test(k, N, r, do_graph=False, verbose=verbose) for _ in range(M))
+                results.append((k, N, r, m))
+                print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
+                print('-' * 80)
+                sys.stdout.flush()
 
-for N in (20, 50, 100, 200, 400, 1e3, 1e4)[4:]:
-    for k in (1, 2, 3, 5, 7, 9)[1:]:
-        for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
-            if 5 * (k**2) > N: continue
-            if not MIN_K <= k < MAX_K: continue
-            m = sum(test(k, N, r, do_graph=False) for _ in range(M))
-            results.append((k, N, r, m))
-            print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
-            print '-' * 80
-            sys.stdout.flush()
-
-for k, N, r, m in results:
-    print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
+    for k, N, r, m in results:
+        print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
+        
+test_all()
+        
 
