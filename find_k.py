@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 
 def find_centers(X, k):
-    """Find the k cluster in the points in X
+    """Divide the points in X into k clusters
         
         X: points 
         k: number of clusters to separate points into
@@ -27,8 +27,8 @@ def find_centers(X, k):
 
     
 def Wk(X, mu, labels):
-    """Intra-cluster distances
-    
+    """Compute the intra-cluster distances for the k clusters in X described by mu and labels.
+
         X: points
         mu: centers of clusters
         labels: indexes of points in X belonging to each cluster
@@ -37,27 +37,29 @@ def Wk(X, mu, labels):
             http://datasciencelab.wordpress.com/2013/12/27/finding-the-k-in-k-means-clustering/
     """
     k = mu.shape[0]
-    clusters = [X[np.where(labels == i)] for i in range(k)]
+    clusters = [X[np.where(labels == i)] for i in xrange(k)]
     n = [x.shape[0] for x in clusters]
-    return sum(np.linalg.norm(clusters[i] - mu[i])**2/(2*n[i]) for i in range(k))
+    return sum(np.linalg.norm(clusters[i] - mu[i])**2/(2 * n[i]) for i in xrange(k))
 
 
 def bounding_box(X):
-    """Bounding box for X
+    """Compute the bounding box for the points in X. This is the highest and lowest 
+            x and y coordinates of all the points.
     
         X: points
         
         Returns: (xmin, xmax), (ymin, ymax)
-            xmin, xmax and min and max of x coordinates of X
-            ymin, ymax and min and max of y coordinates of X
+            xmin, xmax: min and max of x coordinates of X
+            ymin, ymax: min and max of y coordinates of X
     """
-    minmax = lambda x: (x.min(), x.max())    
-    return minmax(X[:, 0]), minmax(X[:, 1])
+    x, y = X[:, 0], X[:, 1]
+    return (x.min(), x.max()), (y.min(), y.max()) 
 
-
-B = 10    
-MIN_K = 1
-MAX_K = 10
+    
+# Parameters for gap statistic calculation
+B = 10      # Number of reference data sets
+MIN_K = 1   # Lowest k to test
+MAX_K = 10  # Highest k to test
 
 def gap_statistic(X):
     """Calculate gap statistic for X
@@ -73,10 +75,6 @@ def gap_statistic(X):
     (xmin, xmax), (ymin, ymax) = bounding_box(X)
    
     N = X.shape[0]
-    ks = range(MIN_K, MAX_K + 2)
-    Wks = np.zeros(len(ks))
-    Wkbs = np.zeros(len(ks))
-    sk = np.zeros(len(ks))
     
     def reference_results(k):
         # Create B reference data sets
@@ -86,16 +84,21 @@ def gap_statistic(X):
                             np.random.uniform(ymin, ymax, N)]).T
             mu, labels = find_centers(Xb, k)
             BWkbs[i] = np.log(Wk(Xb, mu, labels))
-        Wkbs_i = sum(BWkbs)/B
-        sk_i = np.sqrt(sum((BWkbs - Wkbs_i)**2)/B) * np.sqrt(1 + 1/B)
-        return Wkbs_i, sk_i
+        Wkb = sum(BWkbs)/B
+        sk = np.sqrt(sum((BWkbs - Wkb)**2)/B) * np.sqrt(1 + 1/B)
+        return Wkb, sk
+        
+    ks = range(MIN_K, MAX_K + 2)
+    Wks = np.zeros(len(ks))
+    Wkbs = np.zeros(len(ks))
+    sks = np.zeros(len(ks))    
    
-    for indk, k in enumerate(ks):
+    for i, k in enumerate(ks):
         mu, labels = find_centers(X, k)
-        Wks[indk] = np.log(Wk(X, mu, labels))
-        Wkbs[indk], sk[indk] = reference_results(k)    
+        Wks[i] = np.log(Wk(X, mu, labels))
+        Wkbs[i], sks[i] = reference_results(k)    
 
-    return ks, Wks, Wkbs, sk    
+    return ks, Wks, Wkbs, sks    
 
 
 def find_k(X, verbose=False):
@@ -361,7 +364,7 @@ def main():
     print('')
     print('Numpy: %s' % np.version.version) 
     np.random.seed(111) 
-    test_with_graphs()
+    #test_with_graphs()
     test_all()
 
 
