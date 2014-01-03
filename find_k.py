@@ -310,7 +310,7 @@ def test(k, N, r, do_graph=False, verbose=False):
             different_labels.size/N, predicted_k, correct))
     sys.stdout.flush()
     return correct
-    
+
     
 def test_with_graphs():  
 
