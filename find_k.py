@@ -8,6 +8,8 @@ import numpy as np
 from sklearn.cluster import KMeans
 #from collections import defaultdict
 
+np.random.seed(111) 
+
 print('Numpy: %s' % np.version.version) 
 
 
@@ -105,24 +107,36 @@ def gap_statistic(X):
 def init_board(N):
     return np.array([(random.uniform(-1, 1), random.uniform(-1, 1)) for i in range(N)])
 
+ 
+GRID_NUMBER_TARGET = 1000
+GRID_WIDTH = int(np.sqrt(GRID_NUMBER_TARGET))
+GRID_NUMBER = GRID_WIDTH**2 
     
+UNIFORM_GRID = np.random.uniform(-1, 1, size=(GRID_NUMBER, 2))
+print UNIFORM_GRID.shape
+xv, yv = np.meshgrid(np.linspace(-1, 1, GRID_WIDTH), np.linspace(-1, 1, GRID_WIDTH))
+UNIFORM_GRID = np.empty((GRID_WIDTH * GRID_WIDTH, 2))
+UNIFORM_GRID[:, 0] = xv.ravel()
+UNIFORM_GRID[:, 1] = yv.ravel()
+print UNIFORM_GRID.shape
+ 
 def calc_centroids(k, r):
     """Return best spaced centroids in square of radius 1 around origin
+    
+     TODO: centroids = > nuclie
+           cache this call. See Peter Norton code 
     """
 
-    scale = 1.0 - min(r, 0.5) ** 2
+    #scale = 1.0 - min(r, 0.5) ** 2
+    scale = 1.0 - abs(min(r, 0.5))
 
     if k == 1:
         return np.random.uniform(-scale, scale, size=(k, 2))
     
     # Start with centroids near middle of square
-    x0 = np.random.uniform(-0.5, 0.5, size=(k, 2))
-
-    M = 1000
+    x0 = np.random.uniform(-1.0, 1.0, size=(k, 2))
     
-    test_points = np.random.uniform(-1, 1, size=(M, 2))
-    
-    print '@@1'
+    #print '@@1'
 
     # Maximize minimum distance between centroids
     x1 = np.empty((k - 1, 2))
@@ -131,15 +145,15 @@ def calc_centroids(k, r):
         for i in range(k):
             x1 = np.vstack((x0[:i, :], x0[i+1:, :]))
             current_min = np.apply_along_axis(np.linalg.norm, 1, x1 - x0[i]).min()
-            diffs = np.empty(M)
-            for j in range(M):
-                diffs[j] = np.apply_along_axis(np.linalg.norm, 1, x1- test_points[j]).min()
+            diffs = np.empty(GRID_NUMBER)
+            for j in range(GRID_NUMBER):
+                diffs[j] = np.apply_along_axis(np.linalg.norm, 1, x1 - UNIFORM_GRID[j]).min()
             max_j_min = np.argmax(diffs)
 
             if diffs[max_j_min] > current_min:
-                x0[i] = test_points[max_j_min]
+                x0[i] = UNIFORM_GRID[max_j_min]
                 changed = True
-        print '@@2', m        
+        #print '@@2', m        
         if not changed and m > 1:
             break
 
@@ -150,6 +164,8 @@ def calc_centroids(k, r):
 
 def init_board_gauss(N, k, r):
     """Initialize board of N points with k clusters
+    
+    TODO: Compute actual centroids
     """ 
 
     def add_cluster(X, j0, j1, cx, cy, s):
@@ -160,23 +176,24 @@ def init_board_gauss(N, k, r):
             if abs(a) < 1 and abs(b) < 1:
                 X[j, :] = a, b
                 j += 1
+        return np.mean(X[j0:j1], axis = 0)        
 
     n = N/k
     X = np.empty((N, 2))
-    centroids = calc_centroids(k, r)
+    nuclei = calc_centroids(k, r)
+    centroids = np.empty((k, 2))
+    labels = np.empty(N)
 
-    for i, (cx, cy) in enumerate(centroids):
+    for i, (cx, cy) in enumerate(nuclei):
         s = r # np.random.uniform(r, r)
         j0, j1 = int(round(i * n)), int(round((i + 1) * n))
-        add_cluster(X, j0, j1, cx, cy, s)
+        centroids[i] = add_cluster(X, j0, j1, cx, cy, s)
+        labels[j0:j1] = i
    
-    return X, centroids    
+    return X, centroids, labels    
  
  
 
-
-
-np.random.seed(111) 
 
 
 def pbb(X, c=None):
@@ -220,21 +237,23 @@ def closest_indexes(centroids, mu):
         m = order[i] // k
         if c in centroids_done or m in mu_done:
             continue
-        #print c, m    
         mu_indexes[c] = m
         centroids_done.add(c)
         mu_done.add(m)
-        
         if len(mu_done) >= k:
             break
 
     return mu_indexes    
 
 
-color_map = ['b', 'r', 'k', 'y', 'c', 'm']
-marker_map = ['v', 'o', 's', 'x']    
+color_map  = ['b', 'r', 'k', 'y', 'c', 'm']
+# http://matplotlib.org/api/markers_api.html
+marker_map = ['v', 'o', 's', '^', '<', '>', '8']    
 
-def graph_data(k, N, r, X, centroids, mu): 
+def graph_data(k, N, r, X, centroids, mu, labels, predicted_labels): 
+    """
+        TODO: Draw circles of radius r around centroids
+    """
 
     import matplotlib.pyplot as plt    
     
@@ -246,20 +265,32 @@ def graph_data(k, N, r, X, centroids, mu):
         n0 = n
         pbb(x, centroids[i])
         ax.scatter(x[:, 0], x[:, 1], 
+            s=50,
             c=color_map[i % len(color_map)], 
             marker=marker_map[i % len(marker_map)])
+            
+    print labels.shape, predicted_labels.shape
+    for i in range(N):    
+        if labels[i] != predicted_labels[i]:
+            #plt.Circle(X[i, :], radius=0.3, color='k')
+            #plt.Circle(X[i, :], radius=0.1, color='b')
+            #plt.Circle(X[i, :], radius=0.2, color='r', clip_on=False)
+            ax.scatter(X[i, 0], X[i, 1], marker='x', s=100, linewidths=1, color='k', zorder=4)    
 
-    ax.scatter(centroids[:, 0], centroids[:, 1], marker='x', s=169, linewidths=3, color='w', zorder=10)
-    ax.scatter(centroids[:, 0], centroids[:, 1], marker='x', s=169, linewidths=1, color='b', zorder=11)
+    ax.scatter(centroids[:, 0], centroids[:, 1], marker='*', s=169, linewidths=3, color='g', zorder=10)
+    ax.scatter(centroids[:, 0], centroids[:, 1], marker='*', s=121, linewidths=1, color='b', zorder=20)
 
-    ax.scatter(mu[:, 0], mu[:, 1], marker='+', s=169, linewidths=3, color='k', zorder=9) 
-    ax.scatter(mu[:, 0], mu[:, 1], marker='+', s=121, linewidths=1, color='r', zorder=10)   
+    ax.scatter(mu[:, 0], mu[:, 1], marker='+', s=169, linewidths=3, color='k', zorder=11) 
+    ax.scatter(mu[:, 0], mu[:, 1], marker='+', s=121, linewidths=1, color='r', zorder=21)   
 
     for i in range(k): 
         x, y = centroids[i, :] 
         dx, dy = mu[i, :] - centroids[i, :] 
-        ax.arrow(x, y, dx, dy, lw=1, head_width=0.03, length_includes_head=True,
-            zorder=5, fc='y', ec='k')
+        if dx ** 2 + dy **2 >= 0.01:
+            ax.arrow(x, y, dx, dy, lw=1, head_width=0.05, length_includes_head=True,
+                zorder=9, fc='y', ec='k')
+        else:
+            print '>>>', dx, dy
         #ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'r-', lw=3, zorder=20)
         #ax.plot([centroids[i, 0], mu[i, 0]], [centroids[i, 1], mu[i, 1]], 'k-', lw=1, zorder=21)
 
@@ -301,13 +332,18 @@ def test(k, N, r, do_graph=False, verbose=False):
 
     assert MIN_K <= k <= MAX_K, 'invalid k=%d' % k
 
-    X, centroids = init_board_gauss(N, k, r)  
-    print '@@@'
+    X, centroids, labels = init_board_gauss(N, k, r)  
+    #print '@@@'
 
     if do_graph:
-        mu, labels = find_centers(X, k)
+        mu, predicted_labels = find_centers(X, k)
         mu_indexes = closest_indexes(centroids, mu)
-        graph_data(k, N, r, X, centroids, mu[mu_indexes])
+        
+        print '**', labels.shape, predicted_labels.shape
+        
+        for i in range(N):
+            predicted_labels[i] = mu_indexes[predicted_labels[i]]
+        graph_data(k, N, r, X, centroids, mu[mu_indexes], labels, predicted_labels)
 
     predicted_k = find_k(X, verbose)    
     
@@ -318,22 +354,27 @@ def test(k, N, r, do_graph=False, verbose=False):
     
 
 def test_all(verbose=False):
-    r = 0.1    
-    #test(10,100, 0.1, do_graph=True)
-    test(2, 100, 1.0, do_graph=True)
-    
-    test(4, 200, r, do_graph=True) 
-    test(9, 200, r, do_graph=True) 
-    test(4, 200, 0.3, do_graph=True) 
-    test(7, 200, 0.3, do_graph=True) 
-      
-     
-    test(4, 200, r, do_graph=True)    
-    test(5, 50, r, do_graph=True) 
-    test(5, 50, r, do_graph=True) 
-    test(7, 400, r, do_graph=True) 
+
+    np.random.seed(111) 
+    if False:
+        r = 0.1    
+        test(10,100, 0.01, do_graph=True)
+        test(10,100, 0.2, do_graph=True)
+        test(2, 50, 1.0, do_graph=True)
+        test(2, 100, 0.25, do_graph=True)
         
-    M = 1    
+         
+        test(9, 200, 0.2, do_graph=True) 
+        test(4, 200, 0.3, do_graph=True) 
+        test(7, 200, 0.3, do_graph=True) 
+          
+         
+        test(4, 200, r, do_graph=True)    
+        test(5, 50, r, do_graph=True) 
+        test(5, 50, r, do_graph=True) 
+        test(7, 400, r, do_graph=True) 
+        
+    M = 3    
     results = []
 
     
