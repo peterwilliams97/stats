@@ -65,7 +65,7 @@ def gap_statistic(X):
     """Calculate gap statistic for X
     
         X: points
-        
+ 
         Returns: ks, logWks, logWkbs, sk
             ks: k values  MIN_K <= k <= MAX_K]
             Wks: log(intra-cluster distance) for each k
@@ -73,13 +73,13 @@ def gap_statistic(X):
             sk: Normalized std dev log(intra-cluster distance) for each k
     """
     (xmin, xmax), (ymin, ymax) = bounding_box(X)
-   
+
     N = X.shape[0]
-    
+
     def reference_results(k):
         # Create B reference data sets
         BWkbs = np.zeros(B)
-        for i in range(B):
+        for i in xrange(B):
             Xb = np.vstack([np.random.uniform(xmin, xmax, N),
                             np.random.uniform(ymin, ymax, N)]).T
             mu, labels = find_centers(Xb, k)
@@ -87,41 +87,48 @@ def gap_statistic(X):
         Wkb = sum(BWkbs)/B
         sk = np.sqrt(sum((BWkbs - Wkb)**2)/B) * np.sqrt(1 + 1/B)
         return Wkb, sk
-        
-    ks = range(MIN_K, MAX_K + 2)
-    Wks = np.zeros(len(ks))
-    Wkbs = np.zeros(len(ks))
-    sks = np.zeros(len(ks))    
    
-    for i, k in enumerate(ks):
+    for k in xrange(MIN_K, MAX_K + 2):
         mu, labels = find_centers(X, k)
-        Wks[i] = np.log(Wk(X, mu, labels))
-        Wkbs[i], sks[i] = reference_results(k)    
+        logWk = np.log(Wk(X, mu, labels))
+        logWkb, sk = reference_results(k) 
+        yield k, logWk, logWkb, sk 
 
-    return ks, Wks, Wkbs, sks    
+
+def NOT_USED_find_k(X, verbose=False):
+
+    ok = None
+    predicted_k = -1
+
+    for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X)):
+        gap1 = logWkb1 - logWk1
+ 
+        if verbose:    
+            print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k1, logWk1, logWkb1, sk1, gap1, ok))
+
+        if i > 0: 
+            ok = gap > gap1 - sk1
+            if ok and predicted_k < 0:
+                predicted_k = k
+                if not verbose:
+                    break
+      
+        k, logWk, logWkb, sk, gap = k1, logWk1, logWkb1, sk1, gap1
+        
+    return predicted_k 
 
 
 def find_k(X, verbose=False):
 
-    ks, logWks, logWkbs, sks = gap_statistic(X) 
- 
-    statistics = zip(ks, logWks, logWkbs, sks)
-    predicted_k = -1
-
-    for i in range(len(statistics) - 1):
-        k, logWk,  logWkb,  sk  = statistics[i]
-        _, logWk1, logWkb1, sk1 = statistics[i + 1]
-        gap = logWkb - logWk
+    for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X)):
         gap1 = logWkb1 - logWk1
-        ok = gap > gap1 - sk1
-        if ok and predicted_k < 0:
-            predicted_k = k
-            if not verbose:
-                break
-        if verbose:    
-            print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap, ok))
+        if i > 0: 
+            if gap > gap1 - sk1:
+                return k
+        k, logWk, logWkb, sk, gap = k1, logWk1, logWkb1, sk1, gap1
 
-    return predicted_k 
+    return -1    
+    
  
 ################################################################################ 
 #                       TESTING     CODE
@@ -139,28 +146,26 @@ UNIFORM_GRID = np.vstack([xv.ravel(), yv.ravel()]).T
  
 def maximally_spaced_points(k, r):
     """Return best spaced centroids in square of radius 1 around origin
-    
-     TODO: centroids = > nuclie
-           cache this call. See Peter Norton code 
+
     """
 
-    scale = 1.0 - abs(min(r, 0.5))
+    scale = 1.0 - min(r, 0.5)
 
     if k == 1:
-        return np.random.uniform(-scale, scale, size=(k, 2))
+        return np.random.uniform(-min(r, 0.5), min(r, 0.5), size=(k, 2))
     
     # Start with centroids near middle of square
     x0 = np.random.uniform(-1.0, 1.0, size=(k, 2))
    
     # Maximize minimum distance between centroids
     x1 = np.empty((k - 1, 2))
-    for m in range(10):
+    for m in xrange(10):
         changed = False
-        for i in range(k):
+        for i in xrange(k):
             x1 = np.vstack((x0[:i, :], x0[i+1:, :]))
             current_min = np.apply_along_axis(np.linalg.norm, 1, x1 - x0[i]).min()
             diffs = np.empty(GRID_NUMBER)
-            for j in range(GRID_NUMBER):
+            for j in xrange(GRID_NUMBER):
                 diffs[j] = np.apply_along_axis(np.linalg.norm, 1, x1 - UNIFORM_GRID[j]).min()
             max_j_min = np.argmax(diffs)
 
@@ -183,7 +188,7 @@ def init_board_gauss(N, k, r):
         j = j0
         while j < j1:
             a, b = np.random.normal(cx, s), np.random.normal(cy, s)
-            # Continue drawing points from the distribution in the range [-1, 1]
+            # Continue drawing points from the distribution in the range (-1, 1)
             if abs(a) < 1 and abs(b) < 1:
                 X[j, :] = a, b
                 j += 1
@@ -199,7 +204,7 @@ def init_board_gauss(N, k, r):
         j0, j1 = int(round(i * n)), int(round((i + 1) * n))
         centroids[i] = add_cluster(X, j0, j1, cx, cy, r)
         labels[j0:j1] = i
-   
+
     return X, centroids, labels    
 
 
@@ -209,11 +214,11 @@ def closest_indexes(centroids, mu):
         centroids: cluster centroids
         mu: detected cluster centers
     """
-   
+
     k = centroids.shape[0]
     if k == 1:
         return [0]
-         
+
     x = np.empty((k, k, 2))
     for i in 0, 1:
         x[:, :, i] = np.subtract.outer(mu[:, i], centroids[:, i]) 
@@ -226,8 +231,8 @@ def closest_indexes(centroids, mu):
     mu_done = set()
     centroid_indexes = [-1] * k
     mu_indexes = [-1] * k 
-    
-    for i in range(k**2):
+
+    for i in xrange(k**2):
         c = order[i] % k
         m = order[i] // k
         if c in centroids_done or m in mu_done:
@@ -253,17 +258,17 @@ def graph_data(k, N, r, X, centroids, mu, labels, different_labels):
     """
         TODO: Draw circles of radius r around centroids
     """
-    
+
     fig, ax = plt.subplots()
 
-    for i in range(k):
+    for i in xrange(k):
         x = X[np.where(labels == i)]
         ax.scatter(x[:, 0], x[:, 1], s=50, c=COLOR(i), marker=MARKER(i))
  
     for i in different_labels:    
         ax.scatter(X[i, 0], X[i, 1], s=100, c='k', marker='x', linewidths=1, zorder=4)    
 
-    for i in range(k): 
+    for i in xrange(k): 
         cx, cy = centroids[i, :] 
         mx, my = mu[i, :]
         dx, dy = mu[i, :] - centroids[i, :] 
@@ -285,22 +290,27 @@ def graph_data(k, N, r, X, centroids, mu, labels, different_labels):
     ax.grid(True)
     fig.tight_layout()    
     plt.show()    
+
     
+def match_clusters(N, centroids, labels, mu, predicted_labels): 
+
+    centroid_indexes, mu_indexes = closest_indexes(centroids, mu)
+    mu = mu[mu_indexes]
+    predicted_labels2 = np.empty(predicted_labels.shape, dtype=int)
+    for i in xrange(N):
+        predicted_labels2[i] = centroid_indexes[predicted_labels[i]]
+    predicted_labels = predicted_labels2
+    return mu, predicted_labels
+
 
 def test(k, N, r, do_graph=False, verbose=False):
 
     assert MIN_K <= k <= MAX_K, 'invalid k=%d' % k
 
     X, centroids, labels = init_board_gauss(N, k, r)  
-
     mu, predicted_labels = find_centers(X, k)
  
-    centroid_indexes, mu_indexes = closest_indexes(centroids, mu)
-    mu = mu[mu_indexes]
-    predicted_labels2 = np.empty(predicted_labels.shape, dtype=int)
-    for i in range(N):
-        predicted_labels2[i] = centroid_indexes[predicted_labels[i]]
-    predicted_labels = predicted_labels2
+    mu, predicted_labels = match_clusters(N, centroids, labels, mu, predicted_labels)
     different_labels = np.nonzero(labels != predicted_labels)[0]
 
     if do_graph:
@@ -344,12 +354,12 @@ def test_all(verbose=False):
     print('M=%d' % M)
     print('=' * 80)
 
-    for N in (20, 50, 100, 200, 400, 1e3, 1e4)[4:]:
+    for N in (20, 50, 100, 200, 400, 10**3, 10**4)[4:]:
         for k in (1, 2, 3, 5, 7, 9)[1:]:
             for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
                 if 5 * (k**2) > N: continue
                 if not MIN_K <= k <= MAX_K: continue
-                m = sum(test(k, N, r, do_graph=False, verbose=verbose) for _ in range(M))
+                m = sum(test(k, N, r, do_graph=False, verbose=verbose) for _ in xrange(M))
                 results.append((k, N, r, m))
                 print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
                 print('-' * 80)
