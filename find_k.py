@@ -10,6 +10,10 @@ from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt 
 
 
+################################################################################ 
+#                       ARRAY  MANIPULATION CODE
+################################################################################
+
 def norm(a, axis=-1):
     """NumPy 1.8 style norm()
         
@@ -31,7 +35,6 @@ def subtract_outer(a, b):
         b: A NumPy ndarray 
         
         Returns: outer difference of a and b
-            
     """
     assert a.shape[1] == b.shape[1]
     assert len(a.shape) == 2 and len(b.shape) == 2 
@@ -42,6 +45,10 @@ def subtract_outer(a, b):
     return a_b        
 
 
+################################################################################ 
+#                      CODE TO FIND K IN K-MEANS
+################################################################################    
+    
 def find_centers(X, k):
     """Divide the points in X into k clusters
         
@@ -155,7 +162,7 @@ def find_k(X, verbose=1):
  
 ################################################################################ 
 #                       TESTING     CODE
-#################################################################################
+################################################################################
  
 # GRID_NUMBER is a square number close to GRID_NUMBER_TARGET  
 GRID_NUMBER_TARGET = 1000
@@ -191,17 +198,21 @@ def maximally_spaced_points(k, r):
     for m in xrange(10):
         changed = False
         for i in xrange(k):
-            # current_min = minimum distance between ith element in x0 and all other elements in x0
-            # Replace ith element in x0 all with elements in UNIFORM_GRID to find 
-            #   max_j_min = index of element in UNIFORM_GRID that maximizes 
-            #             minimum distance between ith element in x0 and all other elements in x0
-            # If the minimum distance with max_j_min is greater than current_min then make 
-            #  UNIFORM_GRID[max_j_min] the ith element in x0    
+            # Test replacing ith element in x0 all with elements in UNIFORM_GRID to find 
+            #  the one that maximizes the minimum distance to elements other than ith in x0 
+            # If this minimum distance is greater than current_min then make it the ith element 
+            #  in x0    
             x1 = np.vstack((x0[:i, :], x0[i+1:, :]))
             
+            # minimum distance between ith element in x0 and all other elements in x0
             current_min = norm(x1 - x0[i], 1).min()
            
+            # diffs[j] = minimum distance between jth element in UNIFORM_GRID and all elements 
+            # in x0 other than ith
             diffs = norm(subtract_outer(UNIFORM_GRID, x1)).min(axis=-1)
+            
+            #  max_j_min = index of element in UNIFORM_GRID that maximizes 
+            #      minimum distance between ith element in x0 and all other elements in x0
             max_j_min = np.argmax(diffs)
 
             if diffs[max_j_min] > current_min:
