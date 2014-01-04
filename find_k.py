@@ -175,10 +175,10 @@ UNIFORM_GRID = np.vstack([xv.ravel(), yv.ravel()]).T
 
  
 def maximally_spaced_points(k, r):
-    """Return maximully spaced points in square of radius 1 around origin
+    """Return maximally spaced points in square of radius 1 around origin
         (i.e. square containing x, y such that -1 <= x <= 1, -1 <= y <= 1)
         Try to keep points at least distance r from edges of square 
-               
+
         k: number of points
         r: desired minimum distance from point to edge of square    
  
@@ -190,7 +190,7 @@ def maximally_spaced_points(k, r):
 
     scale = 1.0 - min(r, 0.5)    
     
-    # Start with randomly distributed over unit radius square
+    # Start by randomly distributing points over unit radius square
     x0 = np.random.uniform(-1.0, 1.0, size=(k, 2))
    
     # Maximize minimum distance between centroids
@@ -251,8 +251,9 @@ def init_board_gauss(N, k, r):
             around center cx, cy and std dev s.
             
             X: points
-            : number of cluster
-            r: desired std dev of points in cluster from cluster center
+            j0, j1: Add points with indexs j such that j0 <= j < j1
+            cx, cy: Centers of normal distrubtion in x any y directions
+            s: Desired std dev of normal distrubtion in x any y directions
         """
         j = j0
         while j < j1:
@@ -280,7 +281,7 @@ def init_board_gauss(N, k, r):
 
 def closest_indexes(centroids, mu):
     """Find the elements in centroids that are closest to the elements of mu and 
-        return arrays of indexes to 
+        return arrays of indexes that 
             map a centroid element to the closest element of mu, and 
             map a mu element to the closest element of centroids
 
@@ -325,10 +326,9 @@ def closest_indexes(centroids, mu):
 
 
 def match_clusters(centroids, mu, predicted_labels): 
-    """Return versions of mu and predicted_labels that re-indexed so that 
+    """Return versions of mu and predicted_labels that are re-indexed so that 
         mu[i] is closer to centroids[i] than any other element of centroids.
-             map a mu element to the closest element of centroids
-
+ 
         centroids: ndarray of 2d points
         mu: ndarray of 2d points
         predicted_labels: ndarray of integers based on the mu indexes
@@ -464,7 +464,7 @@ def run_test(k, N, r, do_graph=False, verbose=1):
     predicted_k = find_k(X, verbose)    
     correct = predicted_k == k
    
-    # Estimate difficult
+    # Estimate difficulty
     mu, different_labels = estimate_difficulty(k, X, centroids, labels)
    
     if verbose >= 1:
@@ -542,7 +542,7 @@ def test_range(n_repeats, verbose=1):
 def main():
    
     print('')
-    print('Numpy: %s' % np.version.version) 
+    print('NumPy: %s' % np.version.version) 
     np.random.seed(111) 
     #test_with_graphs()
     n_repeats = 10
