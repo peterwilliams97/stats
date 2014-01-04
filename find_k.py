@@ -55,8 +55,6 @@ def bounding_box(X):
     x, y = X[:, 0], X[:, 1]
     return (x.min(), x.max()), (y.min(), y.max()) 
 
-    
-
 
 def gap_statistic(X, min_k, max_k, b):
     """Calculate gap statistic for X
@@ -84,14 +82,14 @@ def gap_statistic(X, min_k, max_k, b):
         logWkb = sum(BWkbs)/b
         sk = np.sqrt(sum((BWkbs - logWkb)**2)/b) * np.sqrt(1 + 1/b)
         return logWkb, sk
-   
+
     for k in xrange(min_k, max_k + 1):
         mu, labels = find_centers(X, k)
         logWk = np.log(Wk(X, mu, labels))
         logWkb, sk = reference_results(k) 
         yield k, logWk, logWkb, sk 
 
-        
+
 # Parameters for gap statistic calculation
 _B = 10      # Number of reference data sets
 _MIN_K = 1   # Lowest k to test
@@ -105,15 +103,14 @@ def NOT_USED_find_k(X, verbose=False):
     for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X)):
         gap1 = logWkb1 - logWk1
  
-        if verbose:    
-            print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k1, logWk1, logWkb1, sk1, gap1, ok))
-
         if i > 0: 
             ok = gap > gap1 - sk1
             if ok and predicted_k < 0:
                 predicted_k = k
                 if not verbose:
                     break
+            if verbose: 
+                print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap, ok))        
       
         k, logWk, logWkb, sk, gap = k1, logWk1, logWkb1, sk1, gap1
         
@@ -125,6 +122,9 @@ def find_k(X, verbose=False):
     for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X, _MIN_K, _MAX_K + 1, _B)):
         gap1 = logWkb1 - logWk1
         if i > 0: 
+            if verbose: 
+                print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap, 
+                        gap > gap1 - sk1))
             if gap > gap1 - sk1:
                 return k
         k, logWk, logWkb, sk, gap = k1, logWk1, logWkb1, sk1, gap1
@@ -255,7 +255,7 @@ MARKER_MAP = ['v', 'o', 's', '^', '<', '>', '8']
 
 def COLOR(i): return COLOR_MAP[i % len(COLOR_MAP)]
 def MARKER(i): return MARKER_MAP[i % len(MARKER_MAP)]    
-    
+
 def graph_data(k, N, r, X, centroids, mu, labels, different_labels): 
     """
         TODO: Draw circles of radius r around centroids
@@ -274,18 +274,19 @@ def graph_data(k, N, r, X, centroids, mu, labels, different_labels):
         cx, cy = centroids[i, :] 
         mx, my = mu[i, :]
         dx, dy = mu[i, :] - centroids[i, :] 
-        
+
         ax.scatter(cx, cy, marker='*', s=199, linewidths=3, c='k', zorder=10)
         ax.scatter(cx, cy, marker='*', s=181, linewidths=2, c=COLOR(i), zorder=20)
         ax.scatter(mx, my, marker='+', s=199, linewidths=4, c='k', zorder=11)
         ax.scatter(mx, my, marker='+', s=181, linewidths=3, c=COLOR(i), zorder=21)
-        if dx ** 2 + dy **2 >= 0.01:
+        if dx**2 + dy**2 >= 0.01:
             ax.arrow(cx, cy, dx, dy, lw=1, head_width=0.05, length_includes_head=True,
                 zorder=9, fc='y', ec='k')
 
     ax.set_xlabel('x', fontsize=20)
     ax.set_ylabel('y', fontsize=20)
-    ax.set_title('Clusters: k=%d, N=%d, r=%.2f, diff=%d' % (k, N, r, different_labels.size))
+    ax.set_title('Clusters: k=%d, N=%d, r=%.2f, diff=%d (%.2f)' % (k, N, r, 
+            different_labels.size, different_labels.size/N))
     plt.xlim((-1.0, 1.0))
     plt.ylim((-1.0, 1.0))
 
@@ -329,9 +330,10 @@ def test(k, N, r, do_graph=False, verbose=False):
     
 def test_with_graphs():  
 
+    test(2,  50, 1.0, do_graph=True)
     test(10, 100, 0.01, do_graph=True)
 
-    test(2,  50, 1.0, do_graph=True)
+    
     test(2, 100, 0.01, do_graph=True)
 
     test(10, 100, 0.2, do_graph=True)
