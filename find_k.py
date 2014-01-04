@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 def norm(a, axis=-1):
-    """NumPy 1.8 style norm
+    """NumPy 1.8 style norm()
         
         a: A NumPy ndarray
         axis: Axis to calculate norm along. Whole ndarray is normed if axis is None
@@ -136,7 +136,7 @@ def find_k(X, verbose=1):
     """Find the best k for k-means gap for X using the Gap Statistic
     
         X: points
-        verbose: verbosity level    
+        verbose: verbosity level: 0, 1 or 2    
  
         Returns: best k if found, otherwise -1
     """
@@ -324,7 +324,7 @@ def match_clusters(centroids, mu, predicted_labels):
         
         Returns: mu2, predicted_labels2
             mu2: mu re-indexed as described above
-            predicted_labels2: predicted_labels updated for the mu => mu2 re-indexingf
+            predicted_labels2: predicted_labels updated for the mu => mu2 re-indexing
     """
 
     centroid_indexes, mu_indexes = closest_indexes(centroids, mu)
@@ -339,25 +339,23 @@ def match_clusters(centroids, mu, predicted_labels):
 
 
 def estimate_difficulty(k, X, centroids, labels): 
-    """Return versions of mu and predicted_labels that re-indexed so that 
-        mu[i] is closer to centroids[i] than any other element of centroids.
-             map a mu element to the closest element of centroids
+    """Estimate difficulty of matching
+        1) find clusters for known k,
+        2) match them to the test clusters and 
+        3) find which points don't belong to the clusters they were created for
+        This gives a crude measure of how much the test clusters overlap and of 
+            how well the detected clusters match the test cluster
 
-        centroids: ndarray of 2d points
-        mu: ndarray of 2d points
-        predicted_labels: ndarray of integers based on the mu indexes
-        
-        Returns: mu2, predicted_labels2
-            mu2: mu re-indexed as described above
-            predicted_labels2: predicted_labels updated for the mu => mu2 re-indexingf
+        k: Number of clusters in test board
+        X: Points in test board 
+        centroids: Centroids of clusters in test board
+        labels: Centroid labels of X
+  
+        Returns: mu, different_labels  
+            mu: Centroids of attempted clustering of test board
+            different_labels: Indexes of points in X for which the attempted clustering 
+                gave different labels than board was created with
     """
-    # Estimate difficulty of matching
-    #  1) find clusters for known k,
-    #  2) match them to the test clusters and 
-    #  3) find which points don't belong to the clusters they were created for
-    # This gives a crude measure of how much the test clusters overlap and of 
-    #  how well the detected clusters match the test cluster
- 
     mu, predicted_labels = find_centers(X, k)
     mu, predicted_labels = match_clusters(centroids, mu, predicted_labels)
     different_labels = np.nonzero(labels != predicted_labels)[0] 
@@ -411,7 +409,7 @@ def graph_board(k, N, r, X, centroids, labels, mu, different_labels):
         ax.scatter(cx, cy, marker='*', s=181, linewidths=2, c=COLOR(i), zorder=20)
         ax.scatter(mx, my, marker='+', s=199, linewidths=4, c='k', zorder=11)
         ax.scatter(mx, my, marker='+', s=181, linewidths=3, c=COLOR(i), zorder=21)
-        if dx**2 + dy**2 >= 0.01:
+        if dx**2 + dy**2 >= 0.001:
             ax.arrow(cx, cy, dx, dy, lw=1, head_width=0.05, length_includes_head=True,
                 zorder=9, fc='y', ec='k')
 
@@ -427,7 +425,24 @@ def graph_board(k, N, r, X, centroids, labels, mu, different_labels):
     plt.show()    
 
 
-def test(k, N, r, do_graph=False, verbose=1):
+def run_test(k, N, r, do_graph=False, verbose=1):
+    """Run a test to see if find_k(X) returns the correct number of clusters for 
+        test board X created with parameters k, N, r
+
+        k, N, r are the instructions for creating the test board
+        
+        k: Number of clusters in test board
+        N: Number of points in test board 
+        r: Radius of cluster distributions in test board
+        do_graph: Graph the test board if True
+        verbose: verbosity level: 0, 1 or 2
+
+        Returns: correct, n_different
+            correct: True if find_k() returned correct k
+            n_diffrent: Number points in test board for which the attempted clustering 
+                gave different labels than board was created with. This is a measure
+                of difficulty
+    """
 
     assert MIN_K <= k <= MAX_K, 'invalid k=%d' % k
 
@@ -451,49 +466,67 @@ def test(k, N, r, do_graph=False, verbose=1):
     return correct, different_labels.size
 
     
-def test_with_graphs():  
+def test_with_graphs():
+    """Run some tests and graph the results
+        This lets you see what some typical test boards look like
+    """  
 
-    test(2,  50, 1.0, do_graph=True)
-    test(10, 100, 0.01, do_graph=True)
-    test(2, 100, 0.01, do_graph=True)
-    test(10, 100, 0.2, do_graph=True)
-    test(2, 100, 0.25, do_graph=True)
-    test(9, 200, 0.2, do_graph=True) 
-    test(4, 200, 0.3, do_graph=True) 
-    test(7, 200, 0.3, do_graph=True) 
-    test(4, 200, r, do_graph=True)    
-    test(5, 50, r, do_graph=True) 
-    test(5, 50, r, do_graph=True) 
-    test(7, 400, r, do_graph=True)  
+    run_test(2,  50, 1.0, do_graph=True)
+    run_test(10, 100, 0.01, do_graph=True)
+    run_test(2, 100, 0.01, do_graph=True)
+    run_test(10, 100, 0.2, do_graph=True)
+    run_test(2, 100, 0.25, do_graph=True)
+    run_test(9, 200, 0.2, do_graph=True) 
+    run_test(4, 200, 0.3, do_graph=True) 
+    run_test(7, 200, 0.3, do_graph=True) 
+    run_test(4, 200, r, do_graph=True)    
+    run_test(5, 50, r, do_graph=True) 
+    run_test(5, 50, r, do_graph=True) 
+    run_test(7, 400, r, do_graph=True)  
 
 
-def test_all(verbose=1):
+def test_range(n_repeats, verbose=1):
+    """Run a range of tests with different test board parameters and printthe results to stdout.
+     
+        n_repeats: Number of tests to run for each k, N, r combination
+        verbose: verbosity level: 0, 1 or 2
 
-    M = 3    
+        Returns: correct, n_different
+            correct: True if find_k() returned correct k
+            n_diffrent: Number points in test board for which the attempted clustering 
+                gave different labels than board was created with. This is a measure
+                of difficulty
+    """
+
     results = []
 
-    print('M=%d' % M)
+    print('n_repeats=%d' % n_repeats)
     print('=' * 80)
 
+    # Run tests printing results as we go  
     for N in (20, 50, 100, 200, 400, 10**3, 10**4):
         for k in (1, 2, 3, 5, 7, 9):
             for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
-                if 5 * (k**2) > N: continue
-                if not MIN_K <= k <= MAX_K: continue
-                corrects, differents = zip(*(test(k, N, r, do_graph=False, verbose=verbose) for _ in xrange(M)))
-                correct, different = sum(corrects), sum(differents) 
-                results.append((k, N, r, correct, different))
-                print('k=%d,N=%3d,r=%.2f: %d of %d = %3d%% (diff=%.2f)' % (k, N, r, 
-                            m, M, int(100.0 * correct/M), different/(M*N)))
+                if not MIN_K <= k <= MAX_K: 
+                    continue
+                corrects, differents = zip(*(run_test(k, N, r, do_graph=False, verbose=verbose) 
+                                                  for _ in xrange(n_repeats)))
+                n_correct, n_different = sum(corrects), sum(differents) 
+                results.append((k, N, r, n_correct, n_different))
+                print('k=%d,N=%3d,r=%.2f: %2d of %d = %3d%% (diff=%.2f)' % (k, N, r, 
+                            n_correct, n_repeats, int(100.0 * n_correct/n_repeats), 
+                            n_different/(n_repeats * N)))
                 if verbose >= 1:
                     print('-' * 80)
                 sys.stdout.flush()
 
+    # Print summary
     print('=' * 80)
-    for k, N, r, m in results:
-        print('k=%d,N=%3d,r=%.2f: %d of %d = %3d%% (diff=%.2f)' % (k, N, r, 
-                    m, M, int(100.0 * correct/M), different/(M*N)))
-    
+    for k, N, r, n_correct, n_different in results:
+        print('k=%d,N=%3d,r=%.2f: %2d of %d = %3d%% (diff=%.2f)' % (k, N, r, 
+                    n_correct, n_repeats, int(100.0 * n_correct/n_repeats), 
+                    n_different/(n_repeats * N)))
+
 
 def main():
    
@@ -501,7 +534,9 @@ def main():
     print('Numpy: %s' % np.version.version) 
     np.random.seed(111) 
     #test_with_graphs()
-    test_all(verbose=1)
+    n_repeats = 10
+    test_range(n_repeats, verbose=0)
     print('')
+    
 
 main()    
