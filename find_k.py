@@ -252,9 +252,10 @@ def init_board_gauss(N, k, r):
                 j += 1
         return np.mean(X[j0:j1], axis=0)        
 
+    nuclei = maximally_spaced_points(k, r)
+
     n = N/k
     X = np.empty((N, 2))
-    nuclei = maximally_spaced_points(k, r)
     centroids = np.empty((k, 2))
     labels = np.empty(N, dtype=int)
 
@@ -267,11 +268,11 @@ def init_board_gauss(N, k, r):
 
 
 def closest_indexes(centroids, mu):
-    """Find the elements centroids that are closest to the elements of mu and 
+    """Find the elements in centroids that are closest to the elements of mu and 
         return arrays of indexes to 
             map a centroid element to the closest element of mu, and 
             map a mu element to the closest element of centroids
-            
+
         centroids: ndarray of 2d points
         mu: ndarray of 2d points
         
@@ -282,7 +283,7 @@ def closest_indexes(centroids, mu):
 
     k = centroids.shape[0]
     if k == 1:
-        return [0]
+        return [0], [0]
 
     # separations[m, c] = distance between mu[m] and centroid[c]
     separations = norm(subtract_outer(mu, centroids), 2)
@@ -310,6 +311,57 @@ def closest_indexes(centroids, mu):
             break
 
     return centroid_indexes, mu_indexes    
+
+
+def match_clusters(centroids, mu, predicted_labels): 
+    """Return versions of mu and predicted_labels that re-indexed so that 
+        mu[i] is closer to centroids[i] than any other element of centroids.
+             map a mu element to the closest element of centroids
+
+        centroids: ndarray of 2d points
+        mu: ndarray of 2d points
+        predicted_labels: ndarray of integers based on the mu indexes
+        
+        Returns: mu2, predicted_labels2
+            mu2: mu re-indexed as described above
+            predicted_labels2: predicted_labels updated for the mu => mu2 re-indexingf
+    """
+
+    centroid_indexes, mu_indexes = closest_indexes(centroids, mu)
+
+    mu2 = mu[mu_indexes]
+    
+    predicted_labels2 = np.empty(predicted_labels.shape, dtype=int)
+    for i in xrange(predicted_labels.shape[0]):
+        predicted_labels2[i] = centroid_indexes[predicted_labels[i]]
+
+    return mu2, predicted_labels2    
+
+
+def estimate_difficulty(k, X, centroids, labels): 
+    """Return versions of mu and predicted_labels that re-indexed so that 
+        mu[i] is closer to centroids[i] than any other element of centroids.
+             map a mu element to the closest element of centroids
+
+        centroids: ndarray of 2d points
+        mu: ndarray of 2d points
+        predicted_labels: ndarray of integers based on the mu indexes
+        
+        Returns: mu2, predicted_labels2
+            mu2: mu re-indexed as described above
+            predicted_labels2: predicted_labels updated for the mu => mu2 re-indexingf
+    """
+    # Estimate difficulty of matching
+    #  1) find clusters for known k,
+    #  2) match them to the test clusters and 
+    #  3) find which points don't belong to the clusters they were created for
+    # This gives a crude measure of how much the test clusters overlap and of 
+    #  how well the detected clusters match the test cluster
+ 
+    mu, predicted_labels = find_centers(X, k)
+    mu, predicted_labels = match_clusters(centroids, mu, predicted_labels)
+    different_labels = np.nonzero(labels != predicted_labels)[0] 
+    return mu, different_labels   
 
 
 COLOR_MAP  = ['b', 'r', 'k', 'y', 'c', 'm']
@@ -374,20 +426,6 @@ def graph_board(k, N, r, X, centroids, labels, mu, different_labels):
     fig.tight_layout()    
     plt.show()    
 
-    
-def match_clusters(N, centroids, labels, mu, predicted_labels): 
-
-    centroid_indexes, mu_indexes = closest_indexes(centroids, mu)
-    
-    mu = mu[mu_indexes]
-    
-    predicted_labels2 = np.empty(predicted_labels.shape, dtype=int)
-    for i in xrange(N):
-        predicted_labels2[i] = centroid_indexes[predicted_labels[i]]
-    predicted_labels = predicted_labels2
-    
-    return mu, predicted_labels
-
 
 def test(k, N, r, do_graph=False, verbose=1):
 
@@ -396,21 +434,12 @@ def test(k, N, r, do_graph=False, verbose=1):
     # Create a board of points to test
     X, centroids, labels = init_board_gauss(N, k, r)  
     
-    # Estimate difficulty of matching
-    #  1) find clusters for known k,
-    #  2) match them to the test clusters and 
-    #  3) find which points don't belong to the clusters they were created for
-    # This gives a crude measure of how much the test clusters overlap and of 
-    #  how well the detected clusters match the test cluster
- 
-    if verbose >= 1 or do_graph:
-        mu, predicted_labels = find_centers(X, k)
-        mu, predicted_labels = match_clusters(N, centroids, labels, mu, predicted_labels)
-        different_labels = np.nonzero(labels != predicted_labels)[0]
-    
     # Do the test!
     predicted_k = find_k(X, verbose)    
     correct = predicted_k == k
+   
+    # Estimate difficult
+    mu, different_labels = estimate_difficulty(k, X, centroids, labels)
    
     if verbose >= 1:
         print('  k=%d,N=%3d,r=%.2f,diff=%.2f: predicted_k=%d,correct=%s' % (k, N, r, 
@@ -419,7 +448,7 @@ def test(k, N, r, do_graph=False, verbose=1):
     if do_graph:
         graph_board(k, N, r, X, centroids, labels, mu, different_labels)
     
-    return correct
+    return correct, different_labels.size
 
     
 def test_with_graphs():  
@@ -451,16 +480,19 @@ def test_all(verbose=1):
             for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
                 if 5 * (k**2) > N: continue
                 if not MIN_K <= k <= MAX_K: continue
-                m = sum(test(k, N, r, do_graph=False, verbose=verbose) for _ in xrange(M))
-                results.append((k, N, r, m))
-                print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/M))
+                corrects, differents = zip(*(test(k, N, r, do_graph=False, verbose=verbose) for _ in xrange(M)))
+                correct, different = sum(corrects), sum(differents) 
+                results.append((k, N, r, correct, different))
+                print('k=%d,N=%3d,r=%.2f: %d of %d = %3d%% (diff=%.2f)' % (k, N, r, 
+                            m, M, int(100.0 * correct/M), different/(M*N)))
                 if verbose >= 1:
                     print('-' * 80)
                 sys.stdout.flush()
 
     print('=' * 80)
     for k, N, r, m in results:
-        print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
+        print('k=%d,N=%3d,r=%.2f: %d of %d = %3d%% (diff=%.2f)' % (k, N, r, 
+                    m, M, int(100.0 * correct/M), different/(M*N)))
     
 
 def main():
@@ -469,7 +501,7 @@ def main():
     print('Numpy: %s' % np.version.version) 
     np.random.seed(111) 
     #test_with_graphs()
-    test_all(verbose=0)
+    test_all(verbose=1)
     print('')
 
 main()    
