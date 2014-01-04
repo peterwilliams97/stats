@@ -11,12 +11,28 @@ import matplotlib.pyplot as plt
 
 
 def norm(a, axis=-1):
+    """NumPy 1.8 style norm
+        
+        a: A NumPy ndarray
+        axis: Axis to calculate norm along. Whole ndarray is normed if axis is None
+        
+        Returns: norm along axis
+    """
     if axis is None:
         return np.linalg.norm(a)
     return np.apply_along_axis(np.linalg.norm, axis, a)
 
 
 def subtract_outer(a, b):
+    """The outer difference of a and b where
+        a_b = subtract_outer(a, b) => a_b[i, j, :] = a[i, :] - b[j, :] 
+
+        a: A NumPy ndarray
+        b: A NumPy ndarray 
+        
+        Returns: outer difference of a and b
+            
+    """
     assert a.shape[1] == b.shape[1]
     assert len(a.shape) == 2 and len(b.shape) == 2 
     n = a.shape[1]
@@ -182,27 +198,10 @@ def maximally_spaced_points(k, r):
             # If the minimum distance with max_j_min is greater than current_min then make 
             #  UNIFORM_GRID[max_j_min] the ith element in x0    
             x1 = np.vstack((x0[:i, :], x0[i+1:, :]))
+            
             current_min = norm(x1 - x0[i], 1).min()
-            
-            if False:
-                print x1.shape
-                print UNIFORM_GRID.shape
-                xx = subtract_outer(UNIFORM_GRID, x1)
-                print xx.shape
-                print norm(xx).shape
-                print norm(xx).min(axis=-1).shape
-                exit()
-                
-            
+           
             diffs = norm(subtract_outer(UNIFORM_GRID, x1)).min(axis=-1)
-            
-            if False:
-                diffs = np.empty(GRID_NUMBER)
-                for j in xrange(GRID_NUMBER):
-                    diffs[j] = norm(x1 - UNIFORM_GRID[j], 1).min()
-                    assert diffs2[j] == diffs[j]   
-                print 'CCC' 
-                
             max_j_min = np.argmax(diffs)
 
             if diffs[max_j_min] > current_min:
@@ -268,31 +267,36 @@ def init_board_gauss(N, k, r):
 
 
 def closest_indexes(centroids, mu):
-    """
-        k: number of labels
-        centroids: cluster centroids
-        mu: detected cluster centers
+    """Find the elements centroids that are closest to the elements of mu and 
+        return arrays of indexes to 
+            map a centroid element to the closest element of mu, and 
+            map a mu element to the closest element of centroids
+            
+        centroids: ndarray of 2d points
+        mu: ndarray of 2d points
+        
+        Returns: centroid_indexes, mu_indexes
+            centroid_indexes[m] is the centroid index corresponding to mu index m
+            mu_indexes[c] is the mu index corresponding to centroid index c
     """
 
     k = centroids.shape[0]
     if k == 1:
         return [0]
 
-    x = subtract_outer(mu, centroids)    
-    if False:
-        x = np.empty((k, k, 2))
-        for i in 0, 1:
-            x[:, :, i] = np.subtract.outer(mu[:, i], centroids[:, i]) 
- 
-    diffs = norm(x, 2)
+    # separations[m, c] = distance between mu[m] and centroid[c]
+    separations = norm(subtract_outer(mu, centroids), 2)
 
-    order = np.argsort(diffs, axis=None)
+    # indexes of diffs in increasing order of distance 
+    order = np.argsort(separations, axis=None)
  
     centroids_done = set()
     mu_done = set()
     centroid_indexes = [-1] * k
     mu_indexes = [-1] * k 
 
+    # Go through the mu[m], centroid[c] pairs in order of increasing separation
+    # If m and c indexes are not assigned, set centroid_indexes[m] = c and mu_indexes[c] = m
     for i in xrange(k**2):
         c = order[i] % k
         m = order[i] // k
@@ -315,9 +319,26 @@ MARKER_MAP = ['v', 'o', 's', '^', '<', '>', '8']
 def COLOR(i): return COLOR_MAP[i % len(COLOR_MAP)]
 def MARKER(i): return MARKER_MAP[i % len(MARKER_MAP)]    
 
-def graph_data(k, N, r, X, centroids, mu, labels, different_labels): 
-    """
-        TODO: Draw circles of radius r around centroids
+
+def graph_board(k, N, r, X, centroids, labels, mu, different_labels): 
+    """Graph a test board
+    
+        k, N, r are the instructions for creating the test board
+        X, centroids, labels describe the test board that was created
+        mu, different_labels are an indication of how difficult the test board is.
+            boards with mu a long way from centroids or with a high 
+            proprorting of different_labels are expected to be more difficult
+
+        k: Number of clusters in test board
+        N: Number of points in test board 
+        r: Radius of cluster distributions in test board
+        X: Points in test board 
+        centroids: Centroids of clusters in test board
+        labels: Centroid labels of X
+        mu: Centroids of attempted clustering of test board
+        different_labels: Indexes of points in X for which the attempted clustering gave different
+                labels than board was created with
+
     """
 
     fig, ax = plt.subplots()
@@ -396,7 +417,7 @@ def test(k, N, r, do_graph=False, verbose=1):
                 different_labels.size/N, predicted_k, correct))
 
     if do_graph:
-        graph_data(k, N, r, X, centroids, mu, labels, different_labels)
+        graph_board(k, N, r, X, centroids, labels, mu, different_labels)
     
     return correct
 
