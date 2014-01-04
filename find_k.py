@@ -22,7 +22,7 @@ def find_centers(X, k):
     estimator = KMeans(init='k-means++', n_clusters=k, n_init=10)
     estimator.fit(X)
     mu = estimator.cluster_centers_
-    labels = estimator.labels_.astype(int)
+    labels = estimator.labels_
     return mu, labels
 
     
@@ -56,12 +56,9 @@ def bounding_box(X):
     return (x.min(), x.max()), (y.min(), y.max()) 
 
     
-# Parameters for gap statistic calculation
-B = 10      # Number of reference data sets
-MIN_K = 1   # Lowest k to test
-MAX_K = 10  # Highest k to test
 
-def gap_statistic(X):
+
+def gap_statistic(X, min_k, max_k, b):
     """Calculate gap statistic for X
     
         X: points
@@ -78,22 +75,27 @@ def gap_statistic(X):
 
     def reference_results(k):
         # Create B reference data sets
-        BWkbs = np.zeros(B)
-        for i in xrange(B):
+        BWkbs = np.zeros(b)
+        for i in xrange(b):
             Xb = np.vstack([np.random.uniform(xmin, xmax, N),
                             np.random.uniform(ymin, ymax, N)]).T
             mu, labels = find_centers(Xb, k)
             BWkbs[i] = np.log(Wk(Xb, mu, labels))
-        Wkb = sum(BWkbs)/B
-        sk = np.sqrt(sum((BWkbs - Wkb)**2)/B) * np.sqrt(1 + 1/B)
-        return Wkb, sk
+        logWkb = sum(BWkbs)/b
+        sk = np.sqrt(sum((BWkbs - logWkb)**2)/b) * np.sqrt(1 + 1/b)
+        return logWkb, sk
    
-    for k in xrange(MIN_K, MAX_K + 2):
+    for k in xrange(min_k, max_k + 1):
         mu, labels = find_centers(X, k)
         logWk = np.log(Wk(X, mu, labels))
         logWkb, sk = reference_results(k) 
         yield k, logWk, logWkb, sk 
 
+        
+# Parameters for gap statistic calculation
+_B = 10      # Number of reference data sets
+_MIN_K = 1   # Lowest k to test
+_MAX_K = 10  # Highest k to test        
 
 def NOT_USED_find_k(X, verbose=False):
 
@@ -120,7 +122,7 @@ def NOT_USED_find_k(X, verbose=False):
 
 def find_k(X, verbose=False):
 
-    for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X)):
+    for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X, _MIN_K, _MAX_K + 1, _B)):
         gap1 = logWkb1 - logWk1
         if i > 0: 
             if gap > gap1 - sk1:
@@ -305,7 +307,7 @@ def match_clusters(N, centroids, labels, mu, predicted_labels):
 
 def test(k, N, r, do_graph=False, verbose=False):
 
-    assert MIN_K <= k <= MAX_K, 'invalid k=%d' % k
+    assert _MIN_K <= k <= _MAX_K, 'invalid k=%d' % k
 
     X, centroids, labels = init_board_gauss(N, k, r)  
     mu, predicted_labels = find_centers(X, k)
@@ -358,7 +360,7 @@ def test_all(verbose=False):
         for k in (1, 2, 3, 5, 7, 9)[1:]:
             for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
                 if 5 * (k**2) > N: continue
-                if not MIN_K <= k <= MAX_K: continue
+                if not _MIN_K <= k <= _MAX_K: continue
                 m = sum(test(k, N, r, do_graph=False, verbose=verbose) for _ in xrange(M))
                 results.append((k, N, r, m))
                 print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
