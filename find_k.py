@@ -1,12 +1,29 @@
 """
-    http://datasciencelab.wordpress.com/2013/12/12/clustering-with-k-means-in-python/
+    Testing the Gap Statistic to find the k in k-means
+
     http://datasciencelab.wordpress.com/2013/12/27/finding-the-k-in-k-means-clustering/
 """
 from __future__ import division
-import sys #, random
+import sys
 import numpy as np
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt 
+
+
+def norm(a, axis=-1):
+    if axis is None:
+        return np.linalg.norm(a)
+    return np.apply_along_axis(np.linalg.norm, axis, a)
+
+
+def subtract_outer(a, b):
+    assert a.shape[1] == b.shape[1]
+    assert len(a.shape) == 2 and len(b.shape) == 2 
+    n = a.shape[1]
+    a_b = np.empty((a.shape[0], b.shape[0], n))
+    for i in xrange(n):
+        a_b[:, :, i] = np.subtract.outer(a[:, i], b[:, i])
+    return a_b        
 
 
 def find_centers(X, k):
@@ -25,7 +42,7 @@ def find_centers(X, k):
     labels = estimator.labels_
     return mu, labels
 
-    
+
 def Wk(X, mu, labels):
     """Compute the intra-cluster distances for the k clusters in X described by mu and labels.
 
@@ -39,7 +56,7 @@ def Wk(X, mu, labels):
     k = mu.shape[0]
     clusters = [X[np.where(labels == i)] for i in xrange(k)]
     n = [x.shape[0] for x in clusters]
-    return sum(np.linalg.norm(clusters[i] - mu[i])**2/(2 * n[i]) for i in xrange(k))
+    return sum(norm(clusters[i] - mu[i], None)**2/(2 * n[i]) for i in xrange(k))
 
 
 def bounding_box(X):
@@ -57,22 +74,26 @@ def bounding_box(X):
 
 
 def gap_statistic(X, min_k, max_k, b):
-    """Calculate gap statistic for X
+    """Calculate gap statistic for X for k = min_k through k = max_k
+        using b reference data sets
     
         X: points
+        min_k: lowest k to test
+        max_k: highest k to test
+        b: number of reference data sets to test against    
  
-        Returns: ks, logWks, logWkbs, sk
-            ks: k values  MIN_K <= k <= MAX_K]
-            Wks: log(intra-cluster distance) for each k
-            Wkbs: average referemce log(intra-cluster distance) for each k
-            sk: Normalized std dev log(intra-cluster distance) for each k
+        Returns: Generator yielding k, logWk, logWkb, sk for min_k <= k <= max_k
+            k: This k
+            Wks: log(intra-cluster distance) for k
+            Wkbs: average reference log(intra-cluster distance) for k
+            sk: Normalized std dev log(intra-cluster distance) for k
     """
     (xmin, xmax), (ymin, ymax) = bounding_box(X)
 
     N = X.shape[0]
 
     def reference_results(k):
-        # Create B reference data sets
+        # Create b reference data sets
         BWkbs = np.zeros(b)
         for i in xrange(b):
             Xb = np.vstack([np.random.uniform(xmin, xmax, N),
@@ -91,40 +112,24 @@ def gap_statistic(X, min_k, max_k, b):
 
 
 # Parameters for gap statistic calculation
-_B = 10      # Number of reference data sets
-_MIN_K = 1   # Lowest k to test
-_MAX_K = 10  # Highest k to test        
+B = 10      # Number of reference data sets
+MIN_K = 1   # Lowest k to test
+MAX_K = 10  # Highest k to test        
 
-def NOT_USED_find_k(X, verbose=False):
-
-    ok = None
-    predicted_k = -1
-
-    for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X)):
-        gap1 = logWkb1 - logWk1
+def find_k(X, verbose=1):
+    """Find the best k for k-means gap for X using the Gap Statistic
+    
+        X: points
+        verbose: verbosity level    
  
-        if i > 0: 
-            ok = gap > gap1 - sk1
-            if ok and predicted_k < 0:
-                predicted_k = k
-                if not verbose:
-                    break
-            if verbose: 
-                print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap, ok))        
-      
-        k, logWk, logWkb, sk, gap = k1, logWk1, logWkb1, sk1, gap1
-        
-    return predicted_k 
+        Returns: best k if found, otherwise -1
+    """
 
-
-def find_k(X, verbose=False):
-
-    for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X, _MIN_K, _MAX_K + 1, _B)):
+    for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X, MIN_K, MAX_K + 1, B)):
         gap1 = logWkb1 - logWk1
         if i > 0: 
-            if verbose: 
-                print('%3d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap, 
-                        gap > gap1 - sk1))
+            if verbose >= 2: 
+                print('%5d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap))
             if gap > gap1 - sk1:
                 return k
         k, logWk, logWkb, sk, gap = k1, logWk1, logWkb1, sk1, gap1
@@ -147,28 +152,57 @@ UNIFORM_GRID = np.vstack([xv.ravel(), yv.ravel()]).T
 
  
 def maximally_spaced_points(k, r):
-    """Return best spaced centroids in square of radius 1 around origin
-
+    """Return maximully spaced points in square of radius 1 around origin
+        (i.e. square containing x, y such that -1 <= x <= 1, -1 <= y <= 1)
+        Try to keep points at least distance r from edges of square 
+               
+        k: number of points
+        r: desired minimum distance from point to edge of square    
+ 
+        Returns: ndarray of N 2-d points
     """
-
-    scale = 1.0 - min(r, 0.5)
 
     if k == 1:
         return np.random.uniform(-min(r, 0.5), min(r, 0.5), size=(k, 2))
+
+    scale = 1.0 - min(r, 0.5)    
     
-    # Start with centroids near middle of square
+    # Start with randomly distributed over unit radius square
     x0 = np.random.uniform(-1.0, 1.0, size=(k, 2))
    
     # Maximize minimum distance between centroids
-    x1 = np.empty((k - 1, 2))
+ 
     for m in xrange(10):
         changed = False
         for i in xrange(k):
+            # current_min = minimum distance between ith element in x0 and all other elements in x0
+            # Replace ith element in x0 all with elements in UNIFORM_GRID to find 
+            #   max_j_min = index of element in UNIFORM_GRID that maximizes 
+            #             minimum distance between ith element in x0 and all other elements in x0
+            # If the minimum distance with max_j_min is greater than current_min then make 
+            #  UNIFORM_GRID[max_j_min] the ith element in x0    
             x1 = np.vstack((x0[:i, :], x0[i+1:, :]))
-            current_min = np.apply_along_axis(np.linalg.norm, 1, x1 - x0[i]).min()
-            diffs = np.empty(GRID_NUMBER)
-            for j in xrange(GRID_NUMBER):
-                diffs[j] = np.apply_along_axis(np.linalg.norm, 1, x1 - UNIFORM_GRID[j]).min()
+            current_min = norm(x1 - x0[i], 1).min()
+            
+            if False:
+                print x1.shape
+                print UNIFORM_GRID.shape
+                xx = subtract_outer(UNIFORM_GRID, x1)
+                print xx.shape
+                print norm(xx).shape
+                print norm(xx).min(axis=-1).shape
+                exit()
+                
+            
+            diffs = norm(subtract_outer(UNIFORM_GRID, x1)).min(axis=-1)
+            
+            if False:
+                diffs = np.empty(GRID_NUMBER)
+                for j in xrange(GRID_NUMBER):
+                    diffs[j] = norm(x1 - UNIFORM_GRID[j], 1).min()
+                    assert diffs2[j] == diffs[j]   
+                print 'CCC' 
+                
             max_j_min = np.argmax(diffs)
 
             if diffs[max_j_min] > current_min:
@@ -178,15 +212,38 @@ def maximally_spaced_points(k, r):
         if not changed and m > 1:
             break
 
+    # Shrink square to get points r-ish distant from edges of unit radius square
     return x0 * scale      
 
 
 def init_board_gauss(N, k, r):
     """Initialize board of N points with k clusters
+
+        Board is square of radius 1 around origin
+        (i.e. square containing x, y such that -1 <= x <= 1, -1 <= y <= 1)
  
-    """ 
+        Try to space cluster centers as far apart as possible while keeping them at least distance
+        r from edges of unit radius square. This is done in an approximate way by generating 
+        random points around maximally spaced nuclei.
+  
+        N: number of points
+        k: number of cluster
+        r: desired std dev of points in cluster from cluster center    
+ 
+        Returns: X, centroids, labels 
+            X: points
+            centroids: centroids of clusters
+            labels: cluster index for each point
+    """
 
     def add_cluster(X, j0, j1, cx, cy, s):
+        """Add a cluster of normally distributed points to x for indexes [j0,j1) 
+            around center cx, cy and std dev s.
+            
+            X: points
+            : number of cluster
+            r: desired std dev of points in cluster from cluster center
+        """
         j = j0
         while j < j1:
             a, b = np.random.normal(cx, s), np.random.normal(cy, s)
@@ -194,7 +251,7 @@ def init_board_gauss(N, k, r):
             if abs(a) < 1 and abs(b) < 1:
                 X[j, :] = a, b
                 j += 1
-        return np.mean(X[j0:j1], axis = 0)        
+        return np.mean(X[j0:j1], axis=0)        
 
     n = N/k
     X = np.empty((N, 2))
@@ -221,11 +278,13 @@ def closest_indexes(centroids, mu):
     if k == 1:
         return [0]
 
-    x = np.empty((k, k, 2))
-    for i in 0, 1:
-        x[:, :, i] = np.subtract.outer(mu[:, i], centroids[:, i]) 
+    x = subtract_outer(mu, centroids)    
+    if False:
+        x = np.empty((k, k, 2))
+        for i in 0, 1:
+            x[:, :, i] = np.subtract.outer(mu[:, i], centroids[:, i]) 
  
-    diffs = np.apply_along_axis(np.linalg.norm, 2, x)
+    diffs = norm(x, 2)
 
     order = np.argsort(diffs, axis=None)
  
@@ -298,33 +357,47 @@ def graph_data(k, N, r, X, centroids, mu, labels, different_labels):
 def match_clusters(N, centroids, labels, mu, predicted_labels): 
 
     centroid_indexes, mu_indexes = closest_indexes(centroids, mu)
+    
     mu = mu[mu_indexes]
+    
     predicted_labels2 = np.empty(predicted_labels.shape, dtype=int)
     for i in xrange(N):
         predicted_labels2[i] = centroid_indexes[predicted_labels[i]]
     predicted_labels = predicted_labels2
+    
     return mu, predicted_labels
 
 
-def test(k, N, r, do_graph=False, verbose=False):
+def test(k, N, r, do_graph=False, verbose=1):
 
-    assert _MIN_K <= k <= _MAX_K, 'invalid k=%d' % k
+    assert MIN_K <= k <= MAX_K, 'invalid k=%d' % k
 
+    # Create a board of points to test
     X, centroids, labels = init_board_gauss(N, k, r)  
-    mu, predicted_labels = find_centers(X, k)
+    
+    # Estimate difficulty of matching
+    #  1) find clusters for known k,
+    #  2) match them to the test clusters and 
+    #  3) find which points don't belong to the clusters they were created for
+    # This gives a crude measure of how much the test clusters overlap and of 
+    #  how well the detected clusters match the test cluster
  
-    mu, predicted_labels = match_clusters(N, centroids, labels, mu, predicted_labels)
-    different_labels = np.nonzero(labels != predicted_labels)[0]
+    if verbose >= 1 or do_graph:
+        mu, predicted_labels = find_centers(X, k)
+        mu, predicted_labels = match_clusters(N, centroids, labels, mu, predicted_labels)
+        different_labels = np.nonzero(labels != predicted_labels)[0]
+    
+    # Do the test!
+    predicted_k = find_k(X, verbose)    
+    correct = predicted_k == k
+   
+    if verbose >= 1:
+        print('  k=%d,N=%3d,r=%.2f,diff=%.2f: predicted_k=%d,correct=%s' % (k, N, r, 
+                different_labels.size/N, predicted_k, correct))
 
     if do_graph:
         graph_data(k, N, r, X, centroids, mu, labels, different_labels)
-
-    predicted_k = find_k(X, verbose)    
-    correct = predicted_k == k
-
-    print('k=%d,N=%3d,r=%.2f,diff=%.2f: predicted_k=%d,correct=%s' % (k, N, r, 
-            different_labels.size/N, predicted_k, correct))
-    sys.stdout.flush()
+    
     return correct
 
     
@@ -332,25 +405,19 @@ def test_with_graphs():
 
     test(2,  50, 1.0, do_graph=True)
     test(10, 100, 0.01, do_graph=True)
-
-    
     test(2, 100, 0.01, do_graph=True)
-
     test(10, 100, 0.2, do_graph=True)
-    
     test(2, 100, 0.25, do_graph=True)
-
     test(9, 200, 0.2, do_graph=True) 
     test(4, 200, 0.3, do_graph=True) 
     test(7, 200, 0.3, do_graph=True) 
-     
     test(4, 200, r, do_graph=True)    
     test(5, 50, r, do_graph=True) 
     test(5, 50, r, do_graph=True) 
     test(7, 400, r, do_graph=True)  
 
 
-def test_all(verbose=False):
+def test_all(verbose=1):
 
     M = 3    
     results = []
@@ -358,28 +425,30 @@ def test_all(verbose=False):
     print('M=%d' % M)
     print('=' * 80)
 
-    for N in (20, 50, 100, 200, 400, 10**3, 10**4)[4:]:
-        for k in (1, 2, 3, 5, 7, 9)[1:]:
+    for N in (20, 50, 100, 200, 400, 10**3, 10**4):
+        for k in (1, 2, 3, 5, 7, 9):
             for r in (0.01, 0.1, 0.3, 0.5, 0.5**0.5, 1.0):
                 if 5 * (k**2) > N: continue
-                if not _MIN_K <= k <= _MAX_K: continue
+                if not MIN_K <= k <= MAX_K: continue
                 m = sum(test(k, N, r, do_graph=False, verbose=verbose) for _ in xrange(M))
                 results.append((k, N, r, m))
-                print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
-                print('-' * 80)
+                print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/M))
+                if verbose >= 1:
+                    print('-' * 80)
                 sys.stdout.flush()
 
+    print('=' * 80)
     for k, N, r, m in results:
         print 'k=%d,N=%3d,r=%.2f: %d of %d = %3d%%' % (k, N, r, m, M, int(100.0 * m/ M))
-
-
+    
 
 def main():
+   
     print('')
     print('Numpy: %s' % np.version.version) 
     np.random.seed(111) 
     #test_with_graphs()
-    test_all()
-
+    test_all(verbose=0)
+    print('')
 
 main()    
