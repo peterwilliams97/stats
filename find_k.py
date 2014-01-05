@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 ################################################################################
 
 def norm(a, axis=-1):
-    """NumPy 1.8 style norm()
+    """NumPy 1.8 style norm(). Needed for the NumPy 1.7.1 I am using.
         
         a: A NumPy ndarray
         axis: Axis to calculate norm along. Whole ndarray is normed if axis is None
@@ -72,7 +72,7 @@ def Wk(X, mu, labels):
         X: points
         mu: centers of clusters
         labels: indexes of points in X belonging to each cluster
-        
+
         Returns: Normalized intra-cluster distance as defined in 
             http://datasciencelab.wordpress.com/2013/12/27/finding-the-k-in-k-means-clustering/
     """
@@ -111,9 +111,8 @@ def gap_statistic(X, min_k, max_k, b):
             Wkbs: average reference log(intra-cluster distance) for k
             sk: Normalized std dev log(intra-cluster distance) for k
     """
-    (xmin, xmax), (ymin, ymax) = bounding_box(X)
-
     N = X.shape[0]
+    (xmin, xmax), (ymin, ymax) = bounding_box(X)
 
     def reference_results(k):
         # Create b reference data sets
@@ -123,8 +122,8 @@ def gap_statistic(X, min_k, max_k, b):
                             np.random.uniform(ymin, ymax, N)]).T
             mu, labels = find_centers(Xb, k)
             BWkbs[i] = np.log(Wk(Xb, mu, labels))
-        logWkb = sum(BWkbs)/b
-        sk = np.sqrt(sum((BWkbs - logWkb)**2)/b) * np.sqrt(1 + 1/b)
+        logWkb = np.sum(BWkbs)/b
+        sk = np.sqrt(np.sum((BWkbs - logWkb)**2)/b) * np.sqrt(1 + 1/b)
         return logWkb, sk
 
     for k in xrange(min_k, max_k + 1):
