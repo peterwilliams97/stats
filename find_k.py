@@ -541,13 +541,17 @@ def test_range(n_repeats, verbose=1):
 
 def main():
    
+    print(__doc__)
     print('')
     print('NumPy: %s' % np.version.version) 
+    
     np.random.seed(111) 
+    
     #test_with_graphs()
     n_repeats = 10
     test_range(n_repeats, verbose=1)
     print('')
- 
 
-main()    
+
+main()
+    
