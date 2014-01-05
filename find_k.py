@@ -148,12 +148,11 @@ def find_k(X, verbose=1):
  
         Returns: best k if found, otherwise -1
     """
-
     for i, (k1, logWk1, logWkb1, sk1) in enumerate(gap_statistic(X, MIN_K, MAX_K + 1, B)):
         gap1 = logWkb1 - logWk1
         if i > 0: 
             if verbose >= 2: 
-                print('%5d %5.2f %5.2f %5.2f : %5.2f %s' % (k, logWk, logWkb, sk, gap))
+                print('%5d %5.2f %5.2f %5.2f : %5.2f' % (k, logWk, logWkb, sk, gap))
             if gap > gap1 - sk1:
                 return k
         k, logWk, logWkb, sk, gap = k1, logWk1, logWkb1, sk1, gap1
@@ -190,10 +189,10 @@ def maximally_spaced_points(k, r):
         return np.random.uniform(-min(r, 0.5), min(r, 0.5), size=(k, 2))
 
     scale = 1.0 - min(r, 0.5)    
-    
+
     # Start by randomly distributing points over unit radius square
     x0 = np.random.uniform(-1.0, 1.0, size=(k, 2))
-   
+
     # Maximize minimum distance between centroids
  
     for m in xrange(10):
@@ -204,14 +203,14 @@ def maximally_spaced_points(k, r):
             # If this minimum distance is greater than current_min then make it the ith element 
             #  in x0    
             x1 = np.vstack((x0[:i, :], x0[i+1:, :]))
-            
+
             # minimum distance between ith element in x0 and all other elements in x0
             current_min = norm(x1 - x0[i], 1).min()
-           
+
             # diffs[j] = minimum distance between jth element in UNIFORM_GRID and all elements 
             # in x0 other than ith
             diffs = norm(subtract_outer(UNIFORM_GRID, x1)).min(axis=-1)
-            
+
             #  max_j_min = index of element in UNIFORM_GRID that maximizes 
             #      minimum distance between ith element in x0 and all other elements in x0
             max_j_min = np.argmax(diffs)
@@ -547,8 +546,8 @@ def main():
     np.random.seed(111) 
     #test_with_graphs()
     n_repeats = 10
-    test_range(n_repeats, verbose=2)
+    test_range(n_repeats, verbose=1)
     print('')
-    
+ 
 
 main()    
