@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 """
     Testing the Gap Statistic to find the k in k-means
 
@@ -545,7 +547,7 @@ def main():
     np.random.seed(111) 
     #test_with_graphs()
     n_repeats = 10
-    test_range(n_repeats, verbose=0)
+    test_range(n_repeats, verbose=2)
     print('')
     
 
