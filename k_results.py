@@ -98,17 +98,17 @@ def read_results(path):
             n_different = (int)(n_repeats * N * diff)
             results.append((k, N, r, n_correct, n_different))
             
-    return results    
+    return results, n_repeats    
 
   
-if len(sys.argv < 1)
+if len(sys.argv) < 1:
     print (__doc__)
     exit(1)
 
 path = sys.argv[1]
 options = [s[0] for s in sys.argv[2:]]  
  
-results = read_results(path)
+results, n_repeats = read_results(path)
 sort_key = make_sort_key(options)     
 results.sort(key=sort_func)
 
